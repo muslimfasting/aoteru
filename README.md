@@ -56,13 +56,14 @@ npm run worker
 3. Add environment variables: `WORLD_SPEED` (`60` for a test world, `1` for real time) and `CRON_SECRET` (any long random string).
 4. Deploy. The build runs the database migrations (`npm run build` → `scripts/migrate.ts`), and the first request creates the world.
 
-**Keeping the world moving on Vercel.** There is no long-lived worker on serverless hosting, so the simulation is driven three ways, all running the same engine:
+**Keeping the world moving on Vercel.** There is no long-lived worker on serverless hosting, so the simulation is driven four ways, all running the same engine:
 
 - every API request first brings the world up to the present (players online keep it current);
+- `/api/health` nudges the world forward whenever it is asked (throttled), so any free uptime monitor pointed at it keeps the simulation current;
 - `/api/cron/advance` processes everything that is due — `vercel.json` schedules it once a day, which every Vercel plan allows; on Pro you can change the schedule to `* * * * *`, or point any external scheduler at it every minute with the header `Authorization: Bearer <CRON_SECRET>`;
 - if nobody was online and no cron ran, the next request replays the missed time step by step.
 
-Because the engine works from stored timestamps, all three produce exactly the same world.
+Because the engine works from stored timestamps, all of them produce exactly the same world.
 
 ## Tests
 
