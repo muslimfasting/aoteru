@@ -120,7 +120,7 @@ export const PROVINCES: ProvinceDef[] = [
     polygon: [V.T5, V.O7, V.O6, V.Y1, V.Y2, V.Y3, V.T6],
     label: [512, 392],
     neighbors: ['tanba', 'omi', 'settsu', 'kawachi', 'yamato', 'iga'],
-    lore: 'The imperial capital. Whoever holds it speaks with the authority of the court.',
+    lore: 'The old capital. Whoever holds it speaks with the authority of the nation that was.',
   },
   {
     code: 'settsu',
@@ -137,7 +137,7 @@ export const PROVINCES: ProvinceDef[] = [
     polygon: [V.T8, V.T7, V.T6, V.Y3, V.S1, V.S2, V.S4, V.S3],
     label: [305, 392],
     neighbors: ['tanba', 'yamashiro', 'kawachi', 'izumi'],
-    lore: 'Harbours on the inner sea, rich with merchant tolls.',
+    lore: 'Harbours on the inner sea, rich with customs duties and coal smoke.',
   },
   {
     code: 'kawachi',
@@ -233,7 +233,7 @@ export const PROVINCES: ProvinceDef[] = [
     polygon: [V.I2, V.I1, V.K1, V.K2, V.M3, V.M2, V.E6, V.C1, V.C2, V.C3, V.C4, V.C5],
     label: [470, 775],
     neighbors: ['izumi', 'kawachi', 'yamato', 'ise'],
-    lore: 'Deep cedar forests and warrior monks at the southern edge of the realm.',
+    lore: 'Deep cedar forests and mountain temples at the southern edge of the realm.',
   },
 ];
 
@@ -350,7 +350,7 @@ export const NPC_CLANS: NpcClanDef[] = [
     capital: 'omi',
     pillarLevel: 3,
     garrison: { ashigaru: 180, yari: 80, archer: 60, samurai: 20 },
-    description: 'Old constables of Omi. Patient builders who strike only when the odds are certain.',
+    description: 'The old administration of Omi. Patient builders who strike only when the odds are certain.',
   },
   {
     key: 'miyoshi',

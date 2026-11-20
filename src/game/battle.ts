@@ -34,9 +34,9 @@ export const WEATHER_INFO: Record<
   { name: string; weight: number; ranged: number; cavalry: number; attackerMorale: number; note: string }
 > = {
   clear: { name: 'Clear skies', weight: 50, ranged: 1, cavalry: 1, attackerMorale: 0, note: 'No effect.' },
-  rain: { name: 'Heavy rain', weight: 20, ranged: 0.7, cavalry: 0.9, attackerMorale: 0, note: 'Wet bowstrings and mud: archers -30%, cavalry -10%.' },
-  fog: { name: 'Morning fog', weight: 12, ranged: 0.85, cavalry: 1, attackerMorale: 5, note: 'Archers -15%. The attacker closes unseen (+5 morale).' },
-  wind: { name: 'Strong wind', weight: 10, ranged: 0.9, cavalry: 1, attackerMorale: 0, note: 'Archers -10%.' },
+  rain: { name: 'Heavy rain', weight: 20, ranged: 0.7, cavalry: 0.9, attackerMorale: 0, note: 'Wet powder and mud: riflemen -30%, cavalry -10%.' },
+  fog: { name: 'Morning fog', weight: 12, ranged: 0.85, cavalry: 1, attackerMorale: 5, note: 'Riflemen -15%. The attacker closes unseen (+5 morale).' },
+  wind: { name: 'Strong wind', weight: 10, ranged: 0.9, cavalry: 1, attackerMorale: 0, note: 'Riflemen -10%: the smoke hangs and the aim drifts.' },
   snow: { name: 'Snow', weight: 8, ranged: 0.95, cavalry: 0.8, attackerMorale: -5, note: 'Cavalry -20%. The march wears on the attacker (-5 morale).' },
 };
 

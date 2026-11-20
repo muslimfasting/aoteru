@@ -127,10 +127,10 @@ export interface BuildingDef {
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   castle: {
     type: 'castle',
-    name: 'Castle',
+    name: 'Citadel',
     kanji: '城',
     role: 'Headquarters and defense',
-    description: 'Seat of your rule. Strengthens defenders, raises army capacity and caps every other building.',
+    description: 'Seat of the provincial government behind its old walls. Strengthens defenders, raises army capacity and caps every other building.',
     maxLevel: 10,
     baseCost: { gold: 400, wood: 300, stone: 400, iron: 50 },
     costGrowth: 1.7,
@@ -169,7 +169,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     name: 'Barracks',
     kanji: '兵',
     role: 'Army recruitment',
-    description: 'Musters ashigaru and yari. Level 2 trains archers. Each level speeds recruitment by 4%.',
+    description: 'Musters militia and line infantry. Level 2 trains riflemen. Each level speeds recruitment by 4%.',
     maxLevel: 10,
     baseCost: { gold: 200, wood: 250, stone: 120, iron: 40 },
     costGrowth: 1.55,
@@ -179,10 +179,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   dojo: {
     type: 'dojo',
-    name: 'Dojo',
+    name: 'Academy',
     kanji: '道',
     role: 'Military training',
-    description: 'Trains samurai; level 2 trains cavalry. Each level steels the local garrison (+4 morale).',
+    description: 'The military academy trains the Guards; level 2 trains cavalry. Each level steels the local garrison (+4 morale).',
     maxLevel: 10,
     baseCost: { gold: 350, wood: 300, stone: 200, iron: 120 },
     costGrowth: 1.55,
@@ -230,7 +230,7 @@ export function buildingBlockReason(type: BuildingType, levels: BuildingLevels):
   const next = levels[type] + 1;
   if (next > def.maxLevel) return 'Already at maximum level';
   if (type !== 'castle' && next > levels.castle) {
-    return `Requires Castle level ${next}`;
+    return `Requires ${BUILDINGS.castle.name} level ${next}`;
   }
   for (const [req, lvl] of Object.entries(def.requires) as [BuildingType, number][]) {
     if (levels[req] < lvl) return `Requires ${BUILDINGS[req].name} level ${lvl}`;
@@ -249,9 +249,9 @@ export function buildingEffectText(type: BuildingType, level: number): string {
     case 'market':
       return `+${pct(level * BUILDING_EFFECTS.marketGoldPerLevel)} gold`;
     case 'barracks':
-      return `${level >= 2 ? 'Ashigaru, Yari, Archers' : 'Ashigaru, Yari'} · ${pct(level * BUILDING_EFFECTS.barracksRecruitSpeedPerLevel)} faster muster`;
+      return `${level >= 2 ? 'Militia, Line Infantry, Riflemen' : 'Militia, Line Infantry'} · ${pct(level * BUILDING_EFFECTS.barracksRecruitSpeedPerLevel)} faster muster`;
     case 'dojo':
-      return `${level >= 2 ? 'Samurai, Cavalry' : 'Samurai'} · +${level * BUILDING_EFFECTS.dojoMoralePerLevel} garrison morale`;
+      return `${level >= 2 ? 'Guards, Cavalry' : 'Guards'} · +${level * BUILDING_EFFECTS.dojoMoralePerLevel} garrison morale`;
   }
 }
 
@@ -293,10 +293,18 @@ export interface UnitDef {
   xp: number;
 }
 
+/**
+ * The five kinds of soldier. The world has rebuilt itself to roughly the age
+ * of steam and telegraph, and its armies look the part: conscript militia,
+ * drilled line infantry who form square against horse, riflemen, the Guards
+ * and cavalry. The type ids are older than the names and are kept as they are
+ * (they are stored with every army); only `name` is shown to players, and it
+ * is already a collective noun — never append an "s".
+ */
 export const UNITS: Record<UnitType, UnitDef> = {
   ashigaru: {
     type: 'ashigaru',
-    name: 'Ashigaru',
+    name: 'Militia',
     kanji: '足',
     role: 'Affordable infantry',
     class: 'infantry',
@@ -314,7 +322,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
   },
   yari: {
     type: 'yari',
-    name: 'Yari',
+    name: 'Line Infantry',
     kanji: '槍',
     role: 'Anti-cavalry',
     class: 'infantry',
@@ -332,7 +340,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
   },
   archer: {
     type: 'archer',
-    name: 'Archer',
+    name: 'Riflemen',
     kanji: '弓',
     role: 'Ranged attack',
     class: 'ranged',
@@ -350,7 +358,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
   },
   samurai: {
     type: 'samurai',
-    name: 'Samurai',
+    name: 'Guards',
     kanji: '侍',
     role: 'Elite infantry',
     class: 'infantry',

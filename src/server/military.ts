@@ -90,7 +90,7 @@ export async function recruit(g: G, clanId: string, provinceId: string, unitType
   const head = await clanHeadcount(g.tx, clanId);
   if (head.total + head.recruiting + count > capacity) {
     const room = Math.max(0, capacity - head.total - head.recruiting);
-    throw conflict('ARMY_CAPACITY', `Army capacity reached: room for ${room} more (capacity ${capacity}). Upgrade a castle or raise Leadership.`);
+    throw conflict('ARMY_CAPACITY', `Army capacity reached: room for ${room} more (capacity ${capacity}). Upgrade a citadel or raise Leadership.`);
   }
   if (province.population - count < MIN_POPULATION) {
     throw conflict('NOT_ENOUGH_POPULATION', `${province.name} cannot spare that many people`);

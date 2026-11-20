@@ -18,7 +18,7 @@ More in [`docs/screenshots`](docs/screenshots): overview, castle, Five Pillars a
 2. Found a nation on a starting province (name, tag, banner, recruitment setting) — or discover a nation and join it: walk into an open one, apply, or accept an invitation.
 3. Hold an office: Chancellor, Minister of State, General, Chief of Staff, Director of Intelligence, Minister of Finance, Official or Clerk. The Chancellor decides what each office may do.
 4. Pay into the shared treasury; the Minister of Finance can pay officials out of it. Every movement is logged with the member who made it.
-5. Build the nation's Castle, Farm, Market, Barracks and Dojo, recruit Ashigaru, Yari, Archers, Samurai and Cavalry, and feed the population and the army from the treasury.
+5. Build the nation's Citadel, Farm, Market, Barracks and Academy, recruit Militia, Line Infantry, Riflemen, Guards and Cavalry, and feed the population and the army from the treasury.
 6. Level your own Five Pillars. Each pillar of the nation is carried by the official holding its cabinet seat, so a government of specialists is stronger than one player mastering everything.
 7. Scout a neighbour: the report shows its garrison and the stance it is held in.
 8. In the War Council, draft a plan — target, host, tactic, commander — give members duties, and launch it when the nation is ready. Tactics can be countered; a wrong guess costs the battle.
@@ -56,13 +56,14 @@ npm run worker
 3. Add environment variables: `WORLD_SPEED` (`60` for a test world, `1` for real time) and `CRON_SECRET` (any long random string).
 4. Deploy. The build runs the database migrations (`npm run build` → `scripts/migrate.ts`), and the first request creates the world.
 
-**Keeping the world moving on Vercel.** There is no long-lived worker on serverless hosting, so the simulation is driven three ways, all running the same engine:
+**Keeping the world moving on Vercel.** There is no long-lived worker on serverless hosting, so the simulation is driven four ways, all running the same engine:
 
 - every API request first brings the world up to the present (players online keep it current);
+- `/api/health` nudges the world forward whenever it is asked (throttled), so any free uptime monitor pointed at it keeps the simulation current;
 - `/api/cron/advance` processes everything that is due — `vercel.json` schedules it once a day, which every Vercel plan allows; on Pro you can change the schedule to `* * * * *`, or point any external scheduler at it every minute with the header `Authorization: Bearer <CRON_SECRET>`;
 - if nobody was online and no cron ran, the next request replays the missed time step by step.
 
-Because the engine works from stored timestamps, all three produce exactly the same world.
+Because the engine works from stored timestamps, all of them produce exactly the same world.
 
 ## Tests
 

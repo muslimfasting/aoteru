@@ -164,7 +164,7 @@ export async function createClan(g: G, player: { id: string; nickname: string },
   await chronicle(g, {
     type: 'founding',
     title: existing ? `The nation of ${clanName} rises again in ${province.name}` : `The nation of ${clanName} is founded in ${province.name}`,
-    description: `On ${dayLabel(g.tick)}, ${daimyoName} raised a banner over ${province.name} and the local warriors swore to follow it.`,
+    description: `On ${dayLabel(g.tick)}, ${daimyoName} raised a flag over ${province.name} and the local militia swore to follow it.`,
     provinceId: province.id,
     clanId,
   });
