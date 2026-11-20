@@ -744,7 +744,7 @@ function CityViewImpl({ name, terrain, levels, upgrading, bannerHex, hour, class
 
   const next = LANDMARKS.filter((m) => levels[m.type] < m.level).slice(0, 2);
   const site = upgrading ? WORKSITES[upgrading] : null;
-  const bannerW = 30 + name.length * 13;
+  const bannerW = 36 + name.length * 16;
 
   return (
     <figure className={className}>
@@ -1068,14 +1068,14 @@ function CityViewImpl({ name, terrain, levels, upgrading, bannerHex, hour, class
             <rect x={2} y={2.5} width={bannerW} height={34} fill={SHADOW} opacity={0.3} />
             <rect width={bannerW} height={34} fill={RED} stroke={INK} strokeWidth={1.2} />
             <rect x={3} y={3} width={bannerW - 6} height={28} fill="none" stroke={PAPER} strokeWidth={0.8} opacity={0.7} />
-            <text x={15} y={24} fontSize={19} fontWeight={800} letterSpacing={2.5} fill={PAPER} className="font-display">
+            <text x={bannerW / 2 + 1.25} y={24} textAnchor="middle" fontSize={19} fontWeight={800} letterSpacing={2.5} fill={PAPER} className="font-display">
               {name.toUpperCase()}
             </text>
           </g>
           <g className="sm:hidden" transform={`translate(${480 - (bannerW * 0.9) / 2} 12) scale(0.9)`}>
             <rect width={bannerW} height={34} fill={RED} stroke={INK} strokeWidth={1.2} />
             <rect x={3} y={3} width={bannerW - 6} height={28} fill="none" stroke={PAPER} strokeWidth={0.8} opacity={0.7} />
-            <text x={15} y={24} fontSize={19} fontWeight={800} letterSpacing={2.5} fill={PAPER} className="font-display">
+            <text x={bannerW / 2 + 1.25} y={24} textAnchor="middle" fontSize={19} fontWeight={800} letterSpacing={2.5} fill={PAPER} className="font-display">
               {name.toUpperCase()}
             </text>
           </g>
