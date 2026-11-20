@@ -3,7 +3,7 @@
  * Shared by server and client; pure data and pure functions.
  */
 import type { ResourceBag, ResourceKey } from './config';
-import type { PillarId } from './pillars';
+import type { Modifiers, PillarId } from './pillars';
 
 // ---------------------------------------------------------------------------
 // Roles (change request §2.4)
@@ -169,3 +169,107 @@ export function residenceCost(toLevel: number): ResourceBag {
 export function playerLevel(pillarLevels: Record<PillarId, number>): number {
   return 1 + Object.values(pillarLevels).reduce((sum, l) => sum + (l - 1), 0);
 }
+
+// ---------------------------------------------------------------------------
+// Doctrine (§10): the clan's way of war. An edge, never a restriction.
+// ---------------------------------------------------------------------------
+
+export const DOCTRINES = ['aggressive', 'defensive', 'intelligence', 'diplomatic'] as const;
+export type DoctrineId = (typeof DOCTRINES)[number];
+
+export interface DoctrineDef {
+  id: DoctrineId;
+  name: string;
+  motto: string;
+  summary: string;
+  /** Added to the clan's modifiers. */
+  mods: Partial<Modifiers>;
+  /** Added to the chance that the clan's tactics come off. */
+  tacticChance: number;
+  /** Plain list of what it gives and what it costs. */
+  effects: string[];
+}
+
+export const DOCTRINE_DEFS: Record<DoctrineId, DoctrineDef> = {
+  aggressive: {
+    id: 'aggressive',
+    name: 'Way of the Tiger',
+    motto: 'Strike first, strike fast.',
+    summary: 'Fast attacks, cavalry and expansion.',
+    mods: { attack: 0.06, marchSpeed: 0.1, cavalry: 0.05, defense: -0.05 },
+    tacticChance: 0,
+    effects: ['+6% damage', '+10% march speed', '+5% cavalry', '-5% protection when defending'],
+  },
+  defensive: {
+    id: 'defensive',
+    name: 'Way of the Mountain',
+    motto: 'Be immovable.',
+    summary: 'Castles, fortification and supply.',
+    mods: { defense: 0.12, upkeep: -0.05, attack: -0.04 },
+    tacticChance: 0,
+    effects: ['+12% protection when defending', '-5% army upkeep', '-4% damage'],
+  },
+  intelligence: {
+    id: 'intelligence',
+    name: 'Way of the Shadow',
+    motto: 'Know the enemy and know yourself.',
+    summary: 'Scouts, deception and surprise.',
+    mods: { scoutSuccess: 0.1, detect: 0.1, intelAttack: 0.05, morale: -2 },
+    tacticChance: 0.05,
+    effects: ['+10% scouting success', '+10% chance to catch enemy scouts', 'Tactics come off 5% more often', '-2 morale'],
+  },
+  diplomatic: {
+    id: 'diplomatic',
+    name: 'Way of the Crane',
+    motto: 'Win without fighting.',
+    summary: 'Loyal provinces, alliances and reputation.',
+    mods: { loyaltyPerDay: 0.5, conquestLoyalty: 8, prodGold: 0.05, attack: -0.03 },
+    tacticChance: 0,
+    effects: ['+0.5 loyalty per day in every province', '+8 loyalty in conquered provinces', '+5% gold', '-3% damage'],
+  },
+};
+
+/** Game hours a clan must keep a doctrine before choosing another. */
+export const DOCTRINE_COOLDOWN_HOURS = 72;
+
+export function applyDoctrine(mods: Modifiers, doctrine: string | null | undefined): Modifiers {
+  const def = doctrine ? DOCTRINE_DEFS[doctrine as DoctrineId] : undefined;
+  if (!def) return mods;
+  const out = { ...mods };
+  for (const [key, value] of Object.entries(def.mods) as [keyof Modifiers, number][]) out[key] += value;
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// War council duties (§7.2) and treaties (§9.3)
+// ---------------------------------------------------------------------------
+
+export const WAR_DUTIES = ['commander', 'scout', 'defender', 'logistics', 'spy', 'reinforcement', 'strategist'] as const;
+export type WarDuty = (typeof WAR_DUTIES)[number];
+
+export const DUTY_DEFS: Record<WarDuty, { name: string; summary: string; effect: string }> = {
+  commander: { name: 'Commander', summary: 'Leads the attack.', effect: 'The army fights with this member\'s own Military pillar.' },
+  strategist: { name: 'Strategist', summary: 'Shapes the plan.', effect: 'The tactic comes off more often: +1% per Intelligence level of this member (up to +6%).' },
+  scout: { name: 'Scout', summary: 'Watches the enemy.', effect: 'With a fresh scouting report on the target, the tactic comes off 8% more often.' },
+  logistics: { name: 'Logistics Officer', summary: 'Manages the supplies.', effect: 'The march consumes 20% less food.' },
+  reinforcement: { name: 'Reinforcement', summary: 'Stands ready with reserves.', effect: 'The army starts with +4 morale.' },
+  defender: { name: 'Defender', summary: 'Guards the home province while the army is away.', effect: 'Keeps watch over the province of departure.' },
+  spy: { name: 'Spy', summary: 'Gathers information inside enemy land.', effect: 'Reports what they learn to the council.' },
+};
+
+export const PACT_TYPES = ['nap', 'alliance'] as const;
+export type PactType = (typeof PACT_TYPES)[number];
+
+export const PACT_DEFS: Record<PactType, { name: string; summary: string; hours: number | null }> = {
+  nap: { name: 'Non-aggression Pact', summary: 'Neither clan may declare war on or attack the other for three days.', hours: 72 },
+  alliance: {
+    name: 'Alliance',
+    summary: 'No war between the two clans; each sees the other\'s garrisons, may march through the other\'s land and is called when the other is attacked.',
+    hours: null,
+  },
+};
+
+/** After breaking a treaty a clan may not declare war on the former partner for this many game hours. */
+export const PACT_BREAK_COOLDOWN_HOURS = 12;
+/** Loyalty lost in every province of a clan that breaks its word. */
+export const PACT_BREAK_LOYALTY = 8;

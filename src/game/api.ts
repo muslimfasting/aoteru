@@ -9,9 +9,10 @@
  * Errors use `ApiErrorBody` with a 4xx/5xx status.
  */
 import type { BattleInputs, BattleOutcome, BattleResult, Weather } from './battle';
-import type { ClanPermission, ClanRole, RecruitmentMode } from './clan';
+import type { ClanPermission, ClanRole, DoctrineId, PactType, RecruitmentMode, WarDuty } from './clan';
 import type { BuildingType, ResourceBag, Terrain, UnitCounts, UnitType } from './config';
 import type { Modifiers, PillarId } from './pillars';
+import type { StanceId, TacticId } from './strategy';
 
 export interface ApiErrorBody {
   error: { code: string; message: string };
@@ -66,6 +67,11 @@ export interface ClanPublicDTO {
   /** id from CLAN_LANGUAGES */
   language: string;
   memberCount: number;
+  /** The clan's way of war (DOCTRINE_DEFS), if it has chosen one. */
+  doctrine: DoctrineId | null;
+  /** Battles won and lost, attacking or defending. */
+  victories: number;
+  defeats: number;
   status: 'active' | 'fallen' | 'disbanded';
   provinceCount: number;
   capitalProvinceId: string | null;
@@ -155,7 +161,7 @@ export interface MeResponse {
 // ---------------------------------------------------------------------------
 
 /** How a province stands toward the viewing clan. */
-export type ProvinceRelation = 'own' | 'unclaimed' | 'enemy' | 'foreign';
+export type ProvinceRelation = 'own' | 'unclaimed' | 'enemy' | 'allied' | 'foreign';
 
 export interface ProvinceSummaryDTO {
   id: string;
@@ -293,6 +299,9 @@ export interface IntelDTO {
   castleLevel: number;
   buildings: Record<BuildingType, number>;
   loyalty: number;
+  /** The stance the garrison held when it was scouted (absent in reports made before stances existed). */
+  stance?: StanceId;
+  stanceName?: string;
   /** Treasury of the owning clan, if any. */
   ownerResources: ResourceBag | null;
 }
@@ -310,6 +319,15 @@ export interface ProvinceOwnDTO {
   recruitment: RecruitOrderDTO[];
   recruitOptions: RecruitOptionDTO[];
   festival: { cost: ResourceBag; loyaltyGain: number; availableAt: string | null };
+  /** How the garrison is ordered to fight (STANCE_DEFS). Changing it needs the `command` permission. */
+  stance: {
+    current: StanceId;
+    /** A newly ordered stance still being prepared; `current` holds until `readyAt`. */
+    pending: { stance: StanceId; readyAt: string } | null;
+    options: { id: StanceId; blockedReason: string | null }[];
+    /** Real milliseconds a new stance takes to prepare. */
+    prepMs: number;
+  };
 }
 
 export interface ProvinceActionsDTO {
@@ -365,6 +383,22 @@ export interface MarchRequest {
   /** For POST /api/battles/declare this field is `targetProvinceId`. */
   toProvinceId: string;
   units: Partial<UnitCounts>;
+  /** Attacks only: the tactic to use (TACTIC_DEFS). Defaults to a frontal assault. */
+  tactic?: TacticId;
+}
+/** One tactic as it stands for a given host and target. */
+export interface TacticOptionDTO {
+  id: TacticId;
+  /** Why this host cannot use it, or null. */
+  blockedReason: string | null;
+  /** Chance to come off against an equally skilled defender who has not prepared for it; null when nothing is rolled. */
+  chance: number | null;
+  cost: Partial<ResourceBag>;
+  /** Extra real milliseconds before the battle is decided. */
+  extraMs: number;
+  supplyFactor: number;
+  /** The scouted stance of the target defeats this tactic. */
+  counteredByKnownStance: boolean;
 }
 
 /** POST /api/army/preview — what an order would do, without issuing it. */
@@ -376,6 +410,10 @@ export interface MarchPreviewResponse {
   durationMs: number;
   /** Food drawn from the stores when the army sets out. */
   supplies: number;
+  /** Attacks only: every tactic, with whether this host can use it. */
+  tactics: TacticOptionDTO[];
+  /** What a fresh scouting report says about how the target is held; null without one. */
+  knownStance: { stance: StanceId; stanceName: string; reportedAt: string } | null;
 }
 
 /** POST /api/army/move and POST /api/battles/declare */
@@ -393,6 +431,10 @@ export interface BattleSummaryDTO {
   defenderName: string;
   /** The viewer's part in the battle. */
   role: 'attacker' | 'defender';
+  /** The attacker's tactic. Hidden ('assault') from the defender until the battle is resolved. */
+  tactic: TacticId;
+  /** The war plan this attack carried out, for the attacker. */
+  planId: string | null;
   status: 'pending' | 'resolved' | 'cancelled';
   startedAt: string;
   resolvesAt: string;
@@ -474,9 +516,23 @@ export interface PillarsResponse {
 // Diplomacy
 // ---------------------------------------------------------------------------
 
+export interface PactDTO {
+  id: string;
+  type: PactType;
+  startedAt: string;
+  /** Null: lasts until one side ends it. */
+  endsAt: string | null;
+}
 export interface DiplomacyClanDTO {
   clan: ClanPublicDTO;
-  relation: 'war' | 'neutral';
+  relation: 'war' | 'neutral' | 'nap' | 'alliance';
+  /** The standing treaty with this clan, if any. */
+  pact: PactDTO | null;
+  /** Treaty offers waiting for an answer (peace offers are in `pendingPeace`). */
+  pendingPacts: { proposalId: string; type: PactType; direction: 'incoming' | 'outgoing' }[];
+  /** Why a treaty cannot be offered, or null if it can. */
+  napBlockedReason: string | null;
+  allianceBlockedReason: string | null;
   warId: string | null;
   canDeclareWar: boolean;
   declareBlockedReason: string | null;
@@ -766,6 +822,8 @@ export interface ClanHubResponse {
   maxMembers: number;
   /** The clan has lost all its land; the leader must found a new seat. */
   fallen: boolean;
+  /** The clan's doctrine and when the leader may next change it. */
+  doctrine: { current: DoctrineId | null; setAt: string | null; changeAvailableAt: string | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -799,7 +857,9 @@ export type RealtimeEventName =
   /** A clan was founded, dissolved or changed its public profile: reload /api/clans. */
   | 'clan:directory'
   /** payload: { purse } */
-  | 'purse:updated';
+  | 'purse:updated'
+  /** A war plan of the viewer's clan changed: reload /api/war. */
+  | 'war:updated';
 
 export interface RealtimeEventDTO {
   id: number;
@@ -877,6 +937,8 @@ export interface DeclareBattleRequest {
   fromProvinceId: string;
   targetProvinceId: string;
   units: Partial<UnitCounts>;
+  /** TACTIC_DEFS id; defaults to 'assault'. */
+  tactic?: TacticId;
 }
 
 /** POST /api/skills/unlock → PillarsResponse */
@@ -892,8 +954,114 @@ export interface DeclareWarRequest {
 /** POST /api/diplomacy/propose → DiplomacyResponse */
 export interface ProposeRequest {
   clanId: string;
-  type: 'peace';
+  type: 'peace' | PactType;
 }
+/** POST /api/diplomacy/break → DiplomacyResponse. Ends a treaty early, at a cost in loyalty. */
+export interface BreakPactRequest {
+  pactId: string;
+}
+/** POST /api/provinces/:id/stance → ProvinceDetailResponse (needs `command`). */
+export interface StanceRequest {
+  stance: StanceId;
+}
+/** POST /api/clan/doctrine → ClanHubResponse (leader only). */
+export interface DoctrineRequest {
+  doctrine: DoctrineId;
+}
+
+// ---------------------------------------------------------------------------
+// War Council (change request §7)
+// ---------------------------------------------------------------------------
+export interface WarAssignmentDTO {
+  playerId: string;
+  nickname: string;
+  portrait: string;
+  duty: WarDuty;
+  dutyName: string;
+  status: 'assigned' | 'accepted' | 'declined';
+  note: string;
+  isYou: boolean;
+}
+export interface WarPlanDTO {
+  id: string;
+  title: string;
+  /** draft → ready → launched → completed, or cancelled. */
+  status: 'draft' | 'ready' | 'launched' | 'completed' | 'cancelled';
+  tactic: TacticId;
+  targetProvinceId: string;
+  targetName: string;
+  /** Owner of the target right now; null for unclaimed land. */
+  targetOwnerName: string | null;
+  originProvinceId: string;
+  originName: string;
+  units: UnitCounts;
+  total: number;
+  commander: { playerId: string; nickname: string } | null;
+  /** When the clan means to strike (for coordination; launching is a separate order). */
+  scheduledAt: string | null;
+  /** Retreat condition, backup strategy and anything else the council should know. */
+  notes: string;
+  createdBy: string | null;
+  createdAt: string;
+  launchedAt: string | null;
+  battleId: string | null;
+  /** Battle outcome once fought, or why the plan was abandoned. */
+  outcome: string | null;
+  assignments: WarAssignmentDTO[];
+  /** What the accepted assignments add to the attack. */
+  bonuses: { chance: number; morale: number; supplyFactor: number; filled: WarDuty[] };
+  /** Chance the tactic comes off against an equally skilled, unprepared defender, bonuses included; null for a plain assault. */
+  chance: number | null;
+  /** What a fresh scouting report says about the target; null without one. */
+  knownStance: { stance: StanceId; stanceName: string; countersTactic: boolean } | null;
+  /** Whether the order could be given right now, and what it would take. */
+  launch: { ok: boolean; reason: string | null; durationMs: number; supplies: number };
+  /** The viewer may edit the plan and its assignments. */
+  canEdit: boolean;
+  /** The viewer may launch it (holds `command`, or is its commander). */
+  canLaunch: boolean;
+}
+/** GET /api/war — the clan's war council. Returned by every war-plan mutation. */
+export interface WarCouncilResponse {
+  plans: WarPlanDTO[];
+  /** The viewer holds `war_plans`. */
+  canPlan: boolean;
+  /** Members who can be given duties. */
+  members: { playerId: string; nickname: string; portrait: string; roleName: string; level: number; pillars: Record<PillarId, number> }[];
+  /** Provinces an attack can start from, with their garrisons. */
+  origins: { id: string; name: string; garrison: UnitCounts }[];
+  /** Provinces the clan does not hold. */
+  targets: { id: string; name: string; ownerName: string | null; relation: ProvinceRelation; terrain: Terrain }[];
+  /** Clan pillar levels, for tactic requirements. */
+  levels: Record<PillarId, number>;
+}
+/** POST /api/war/plans (create) and POST /api/war/plans/:id (edit a draft or ready plan) → WarCouncilResponse (needs war_plans) */
+export interface WarPlanRequest {
+  title: string;
+  targetProvinceId: string;
+  originProvinceId: string;
+  tactic: TacticId;
+  units: Partial<UnitCounts>;
+  commanderId: string | null;
+  scheduledAt?: string | null;
+  notes?: string;
+}
+/** POST /api/war/plans/:id/status → WarCouncilResponse (needs war_plans) */
+export interface WarPlanStatusRequest {
+  status: 'draft' | 'ready' | 'cancelled';
+}
+/** POST /api/war/plans/:id/assign and .../unassign → WarCouncilResponse (needs war_plans). The commander is set on the plan itself. */
+export interface WarAssignRequest {
+  playerId: string;
+  duty: WarDuty;
+  note?: string;
+}
+/** POST /api/war/plans/:id/respond → WarCouncilResponse. A member accepts or declines a duty given to them. */
+export interface WarRespondRequest {
+  duty: WarDuty;
+  accept: boolean;
+}
+/** POST /api/war/plans/:id/launch → WarCouncilResponse. The plan must be ready; needs `command`, or being its commander. */
 
 /** POST /api/diplomacy/respond → DiplomacyResponse */
 export interface RespondRequest {

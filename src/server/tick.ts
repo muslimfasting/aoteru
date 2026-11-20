@@ -18,6 +18,7 @@ import { applyHourly, bagTotal, clanIncome, grant } from './economy';
 import { chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
 import { runNpcTurn } from './npc';
 import { awardClanXp } from './progression';
+import { expirePacts } from './pacts';
 import { payResidences } from './purse';
 import {
   eventMultipliers,
@@ -102,6 +103,7 @@ export async function processTick(tx: Db, state: WorldStateRow, tickNumber: numb
   if (tickNumber % 12 === 6) summary.events += await rollWorldEvent(g);
 
   await expireProposals(g);
+  await expirePacts(g);
 
   // NPC daimyo take their turns after the world has moved.
   for (const clan of active.filter((c) => c.is_npc)) await runNpcTurn(g, clan);

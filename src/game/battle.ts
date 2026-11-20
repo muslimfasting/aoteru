@@ -24,6 +24,7 @@ import {
   type UnitType,
 } from './config';
 import { createRng, type Rng } from './rng';
+import type { StrategyResolution } from './strategy';
 
 export const WEATHERS = ['clear', 'rain', 'fog', 'wind', 'snow'] as const;
 export type Weather = (typeof WEATHERS)[number];
@@ -129,6 +130,8 @@ export interface BattleSideMods {
 export interface BattleSide {
   clanId: string | null;
   name: string;
+  /** The member who led this side, where one did. */
+  commander?: string | null;
   units: UnitCounts;
   /** Starting morale with every flat modifier already applied. */
   morale: number;
@@ -141,6 +144,18 @@ export interface BattleInputs {
   weather: Weather;
   attacker: BattleSide;
   defender: BattleSide;
+  /**
+   * Multiplier on the defender's advantage from castle and terrain (1 =
+   * unchanged, 0 = fighting in the open). Set by the strategy resolution:
+   * a garrison lured out, raided at night or lying in ambush gives up its walls.
+   */
+  positionFactor?: number;
+  /**
+   * How the attacker's tactic fared against the defender's stance. Its effects
+   * are already folded into both sides' modifiers and morale above; it is kept
+   * here so the report can explain the battle and the record can be audited.
+   */
+  strategy?: StrategyResolution & { tacticName: string; stanceName: string; attackerHadIntel: boolean };
 }
 
 export const BATTLE_OUTCOMES = ['decisive_victory', 'victory', 'draw', 'defeat', 'retreat'] as const;
@@ -284,7 +299,8 @@ export function simulateBattle(inputs: BattleInputs, seed: string): BattleResult
 
   const castleBonus =
     inputs.province.castleLevel * rules.castleDefensePerLevel * Math.max(0, 1 - inputs.attacker.mods.siege);
-  const defenderPosition = rules.terrain[terrain].defense * (1 + castleBonus);
+  const positionFactor = Math.max(0, Math.min(1, inputs.positionFactor ?? 1));
+  const defenderPosition = 1 + (rules.terrain[terrain].defense * (1 + castleBonus) - 1) * positionFactor;
 
   let outcome: BattleOutcome = 'draw';
   let winner: BattleResult['winner'] = 'none';

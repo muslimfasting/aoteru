@@ -25,6 +25,9 @@ import type {
   PlayerSearchResponse,
 } from '@/game/api';
 import {
+  DOCTRINES,
+  DOCTRINE_COOLDOWN_HOURS,
+  type DoctrineId,
   CLAN_PERMISSIONS,
   CLAN_ROLES,
   CLAN_RULES,
@@ -46,6 +49,7 @@ import { GameError, notFound } from './errors';
 import { getPurse } from './purse';
 import { loadPlayerProgress, type ClanRow } from './rows';
 import { clanPublic, clanSelf, loadWorldView, ranking, type Viewer, type WorldView } from './views';
+import { gameMs } from './world';
 
 const iso = (d: Date) => d.toISOString();
 
@@ -419,6 +423,14 @@ export async function buildClanHub(db: Db, viewer: Viewer, now: Date): Promise<C
     },
     maxMembers: CLAN_RULES.maxMembers,
     fallen: clan.status !== 'active',
+    doctrine: {
+      current: (DOCTRINES as readonly string[]).includes(clan.doctrine ?? '') ? (clan.doctrine as DoctrineId) : null,
+      setAt: clan.doctrine_set_at ? iso(new Date(clan.doctrine_set_at)) : null,
+      changeAvailableAt:
+        clan.doctrine && clan.doctrine_set_at
+          ? iso(new Date(new Date(clan.doctrine_set_at).getTime() + gameMs({ speed: view.state.speed }, DOCTRINE_COOLDOWN_HOURS * 60)))
+          : null,
+    },
   };
 }
 

@@ -1,10 +1,11 @@
+import { PACT_BREAK_COOLDOWN_HOURS } from '@/game/clan';
 import { WORLD, armyPower } from '@/game/config';
 import { one, rows, type Db } from './db';
 import { conflict, forbidden, invalid, notFound } from './errors';
 import { clanUnits, spend } from './economy';
 import { audit, chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
 import { awardClanXp } from './progression';
-import { atWar, loadActiveWars, loadArmies, loadMods, type ClanRow, type WarRow } from './rows';
+import { atWar, loadActivePacts, loadActiveWars, loadArmies, loadMods, pactBetween, type ClanRow, type WarRow } from './rows';
 import { addMs, dayLabel, gameMs, type G } from './world';
 
 export function warCost(warCostMod: number): number {
@@ -21,6 +22,19 @@ export async function warBlockReason(g: Pick<G, 'tx' | 'now' | 'speed'>, clan: C
   if (target.status !== 'active') return 'That clan has fallen';
   if (atWar(wars, clan.id, target.id)) return 'You are already at war';
   if (isProtected(target, g.now)) return 'A newly founded clan is under the truce of the realm and cannot be attacked yet';
+  const pact = pactBetween(await loadActivePacts(g.tx, g.now), clan.id, target.id);
+  if (pact) return pact.type === 'alliance' ? 'You are allied with that clan. End the alliance first.' : 'A non-aggression pact binds you. End it first.';
+  const broken = await one<{ ended_at: Date }>(
+    g.tx,
+    `SELECT ended_at FROM pacts
+      WHERE status = 'ended' AND end_reason = 'broken' AND broken_by = $1
+        AND ((clan_a = $1 AND clan_b = $2) OR (clan_a = $2 AND clan_b = $1))
+      ORDER BY ended_at DESC LIMIT 1`,
+    [clan.id, target.id],
+  );
+  if (broken && addMs(broken.ended_at, gameMs(g, PACT_BREAK_COOLDOWN_HOURS * 60)).getTime() > g.now.getTime()) {
+    return 'You have only just broken your word to that clan. Honour demands you wait before declaring war.';
+  }
   const lastPeace = await one<{ ended_at: Date }>(
     g.tx,
     `SELECT ended_at FROM wars

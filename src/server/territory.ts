@@ -31,7 +31,11 @@ export async function transferProvince(
       newLoyalty = 50;
     }
   }
-  await g.tx.query('UPDATE provinces SET owner_clan_id = $2, loyalty = $3, owner_since = $4, updated_at = $4 WHERE id = $1', [
+  await g.tx.query(
+    `UPDATE provinces SET owner_clan_id = $2, loyalty = $3, owner_since = $4, updated_at = $4,
+                          stance = 'formation', stance_next = NULL, stance_ready_at = NULL
+      WHERE id = $1`,
+    [
     province.id,
     toClanId,
     newLoyalty,
@@ -88,6 +92,14 @@ async function clanFalls(g: G, clan: ClanRow, lastProvince: ProvinceRow): Promis
     g.now,
   ]);
   await g.tx.query(`UPDATE recruitment_orders SET status = 'cancelled' WHERE clan_id = $1 AND status = 'pending'`, [clan.id]);
+  await g.tx.query(`UPDATE pacts SET status = 'ended', ended_at = $2, end_reason = 'clan_fallen' WHERE status = 'active' AND (clan_a = $1 OR clan_b = $1)`, [
+    clan.id,
+    g.now,
+  ]);
+  await g.tx.query(`UPDATE war_plans SET status = 'cancelled', outcome = 'the clan fell', updated_at = $2 WHERE clan_id = $1 AND status IN ('draft', 'ready', 'launched')`, [
+    clan.id,
+    g.now,
+  ]);
   // Armies in the field have no lord left to serve. Battles they were fighting are cancelled when they come due.
   await g.tx.query('DELETE FROM armies WHERE clan_id = $1', [clan.id]);
   await chronicle(g, {

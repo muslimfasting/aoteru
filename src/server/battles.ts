@@ -1,3 +1,8 @@
+import { DOCTRINE_DEFS, type DoctrineId } from '@/game/clan';
+import { emptyModifiers } from '@/game/pillars';
+import { STANCE_DEFS, TACTICS, TACTIC_DEFS, resolveStrategy, type StanceId, type StrategySideEffect, type TacticId } from '@/game/strategy';
+import { effectiveStance, npcStance } from './stance';
+import { abandonPlan, completePlan, planBonuses } from './warplans';
 import { randomUUID } from 'node:crypto';
 import {
   OUTCOME_LABEL,
@@ -19,7 +24,7 @@ import { one, rows } from './db';
 import { getResources, grant, spend } from './economy';
 import { audit, chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
 import { awardClanXp } from './progression';
-import { atWar, levelsByProvince, loadActiveWars, loadArmies, loadBuildings, loadMods, type ArmyRow, type ClanRow, type ProvinceRow } from './rows';
+import { atWar, levelsByProvince, loadActiveWars, loadArmies, loadBuildings, loadProgress, type ArmyRow, type ClanRow, type ProvinceRow } from './rows';
 import { transferProvince } from './territory';
 import { addMs, dayLabel, gameMs, type G } from './world';
 
@@ -44,9 +49,24 @@ export async function createBattle(g: G, army: ArmyRow, province: ProvinceRow): 
   const seed = randomUUID();
   const battle = await one<{ id: string }>(
     g.tx,
-    `INSERT INTO battles (province_id, attacker_clan_id, defender_clan_id, attacker_army_id, origin_province_id, seed, weather, started_at, resolves_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [province.id, army.clan_id, province.owner_clan_id, army.id, army.province_id, seed, rollWeather(seed), g.now, addMs(g.now, gameMs(g, WORLD.battleMinutes))],
+    `INSERT INTO battles (province_id, attacker_clan_id, defender_clan_id, attacker_army_id, origin_province_id, seed, weather, started_at, resolves_at,
+                          tactic, commander_player_id, plan_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    [
+      province.id,
+      army.clan_id,
+      province.owner_clan_id,
+      army.id,
+      army.province_id,
+      seed,
+      rollWeather(seed),
+      g.now,
+      // A siege takes longer to come to a decision.
+      addMs(g.now, gameMs(g, WORLD.battleMinutes + (TACTIC_DEFS[army.tactic as TacticId]?.extraMinutes ?? 0))),
+      army.tactic,
+      army.commander_player_id,
+      army.plan_id,
+    ],
   );
   await g.tx.query(`UPDATE armies SET status = 'besieging' WHERE id = $1`, [army.id]);
 
@@ -69,6 +89,19 @@ export async function createBattle(g: G, army: ArmyRow, province: ProvinceRow): 
     link: `/game/battles/${battle!.id}`,
   });
   return battle!.id;
+}
+
+const BASE_LEVELS = { military: 1, leadership: 1, economy: 1, intelligence: 1, culture: 1 };
+
+/** Fold the outcome of the strategy contest into a side's battle modifiers. */
+function withStrategy(mods: BattleSideMods, effect: StrategySideEffect): BattleSideMods {
+  return {
+    ...mods,
+    attack: mods.attack + effect.attack,
+    toughness: mods.toughness + effect.toughness,
+    firstRound: mods.firstRound + effect.firstRound,
+    siege: Math.min(1, mods.siege + effect.siege),
+  };
 }
 
 function sideMods(mods: Modifiers, extra: { attack?: number; toughness?: number } = {}): BattleSideMods {
@@ -136,12 +169,14 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
   const attacker = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1', [battle.attacker_clan_id]);
   if (!army || !attacker || attacker.status !== 'active' || totalUnits(army.units) <= 0) {
     if (army) await deleteArmy(g.tx, army.id);
+    await abandonPlan(g, army?.plan_id ?? null, 'called off');
     return cancelBattle(g, battle);
   }
 
   // The situation may have changed while the armies were engaged.
   if (province.owner_clan_id === attacker.id) {
     await mergeIntoGarrison(g.tx, army, province.id);
+    await abandonPlan(g, army.plan_id, 'the province was already taken');
     return cancelBattle(g, battle);
   }
   if (province.owner_clan_id && !atWar(await loadActiveWars(g.tx), attacker.id, province.owner_clan_id)) {
@@ -152,6 +187,7 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
       body: `You are no longer at war with the lord of ${province.name}. Your army is marching home.`,
       link: '/game/military',
     });
+    await abandonPlan(g, army.plan_id, 'peace was made');
     return cancelBattle(g, battle);
   }
 
@@ -160,8 +196,11 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
   const garrison = await getGarrison(g.tx, province.id, defenderId);
   const levels = levelsByProvince(await loadBuildings(g.tx, province.id)).get(province.id);
   const castleLevel = levels?.castle ?? province.defense_level;
-  const modsA = await loadMods(g.tx, attacker.id, army.commander_player_id);
-  const modsD = await loadMods(g.tx, defenderId);
+  // The member leading the army fights with their own Military pillar.
+  const progressA = (await loadProgress(g.tx, attacker.id, army.commander_player_id)).get(attacker.id);
+  const progressD = defenderId ? (await loadProgress(g.tx, defenderId)).get(defenderId) : undefined;
+  const modsA = progressA?.mods ?? emptyModifiers();
+  const modsD = progressD?.mods ?? emptyModifiers();
 
   // Strategy: a fresh scouting report on the target sharpens the attack.
   const intel = await one(
@@ -180,6 +219,27 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
       (province.loyalty - 50) / 5
     : 95 - modsA.enemyMorale;
 
+  // The Art of War: the attacker's tactic against the stance the province is held in.
+  const tactic: TacticId = (TACTICS as readonly string[]).includes(army.tactic) ? (army.tactic as TacticId) : 'assault';
+  const stance: StanceId =
+    defender && !defender.is_npc ? effectiveStance(province, g.now) : npcStance(province, totalUnits(garrison?.units ?? emptyUnits()), g.tick);
+  const bonus = await planBonuses(g.tx, army.plan_id, !!intel);
+  const doctrineChance = DOCTRINE_DEFS[attacker.doctrine as DoctrineId]?.tacticChance ?? 0;
+  const strategy = resolveStrategy(
+    {
+      tactic,
+      stance,
+      attackerHasIntel: !!intel,
+      attackerLevels: progressA?.levels ?? BASE_LEVELS,
+      defenderLevels: progressD?.levels ?? BASE_LEVELS,
+      chanceBonus: bonus.chance + doctrineChance,
+    },
+    battle.seed,
+  );
+  const commander = army.commander_player_id
+    ? await one<{ nickname: string }>(g.tx, 'SELECT nickname FROM players WHERE id = $1', [army.commander_player_id])
+    : null;
+
   const inputs: BattleInputs = {
     rules: currentBattleRules(),
     province: { code: province.code, name: province.name, terrain: province.terrain, castleLevel },
@@ -187,17 +247,20 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
     attacker: {
       clanId: attacker.id,
       name: attacker.name,
+      commander: commander?.nickname ?? null,
       units: army.units,
-      morale: Math.round(attackerMorale * 10) / 10,
-      mods: sideMods(modsA, { attack: intel ? modsA.intelAttack : 0 }),
+      morale: Math.round((attackerMorale + strategy.attacker.morale + bonus.morale) * 10) / 10,
+      mods: withStrategy(sideMods(modsA, { attack: intel ? modsA.intelAttack : 0 }), strategy.attacker),
     },
     defender: {
       clanId: defenderId,
       name: defender?.name ?? `Warriors of ${province.name}`,
       units: garrison?.units ?? emptyUnits(),
-      morale: Math.round(defenderMorale * 10) / 10,
-      mods: defender ? sideMods(modsD, { toughness: modsD.defense }) : neutralBattleMods(),
+      morale: Math.round((defenderMorale + strategy.defender.morale) * 10) / 10,
+      mods: withStrategy(defender ? sideMods(modsD, { toughness: modsD.defense }) : neutralBattleMods(), strategy.defender),
     },
+    positionFactor: strategy.positionFactor,
+    strategy: { ...strategy, tacticName: TACTIC_DEFS[tactic].name, stanceName: STANCE_DEFS[stance].name, attackerHadIntel: !!intel },
   };
   const result: BattleResult = simulateBattle(inputs, battle.seed);
   const attackerLost = totalUnits(result.attacker.losses);
@@ -269,6 +332,15 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
       attackerWon ? (captured ? 5 : 2) : 0,
     ]);
   }
+
+  // The clans' war records, and the war plan this attack carried out.
+  if (result.winner !== 'none') {
+    const winnerId = attackerWon ? attacker.id : defenderId;
+    const loserId = attackerWon ? defenderId : attacker.id;
+    if (winnerId) await g.tx.query('UPDATE clans SET victories = victories + 1 WHERE id = $1', [winnerId]);
+    if (loserId) await g.tx.query('UPDATE clans SET defeats = defeats + 1 WHERE id = $1', [loserId]);
+  }
+  await completePlan(g, army.plan_id, battle.id, result, captured);
 
   const label = OUTCOME_LABEL[result.outcome];
   const defenderName = inputs.defender.name;

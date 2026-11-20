@@ -4,6 +4,9 @@
  * caller's transaction under the world lock and re-reads the rows it judges.
  */
 import {
+  DOCTRINES,
+  DOCTRINE_COOLDOWN_HOURS,
+  DOCTRINE_DEFS,
   CLAN_LANGUAGES,
   CLAN_PERMISSIONS,
   CLAN_ROLES,
@@ -25,7 +28,7 @@ import { GameError, conflict, invalid, notFound } from './errors';
 import { audit, chronicle, clanActivity, emit, notifyClan, notifyClanRoles, notifyPlayer, playerRoom, WORLD_ROOM } from './notify';
 import type { ClanRow, MemberRow, ProvinceRow } from './rows';
 import { transferProvince } from './territory';
-import { dayLabel, type G } from './world';
+import { addMs, dayLabel, gameMs, type G } from './world';
 
 interface PlayerRef {
   id: string;
@@ -240,6 +243,14 @@ async function disbandClan(g: G, clan: ClanRow, leaderName: string): Promise<voi
     g.now,
   ]);
   await g.tx.query(`UPDATE recruitment_orders SET status = 'cancelled' WHERE clan_id = $1 AND status = 'pending'`, [clan.id]);
+  await g.tx.query(`UPDATE pacts SET status = 'ended', ended_at = $2, end_reason = 'clan_disbanded' WHERE status = 'active' AND (clan_a = $1 OR clan_b = $1)`, [
+    clan.id,
+    g.now,
+  ]);
+  await g.tx.query(`UPDATE war_plans SET status = 'cancelled', outcome = 'the clan was dissolved', updated_at = $2 WHERE clan_id = $1 AND status IN ('draft', 'ready', 'launched')`, [
+    clan.id,
+    g.now,
+  ]);
   await g.tx.query(`UPDATE clan_applications SET status = 'rejected', decided_at = $2 WHERE clan_id = $1 AND status = 'pending'`, [clan.id, g.now]);
   await g.tx.query(`UPDATE clan_invitations SET status = 'revoked', decided_at = $2 WHERE clan_id = $1 AND status = 'pending'`, [clan.id, g.now]);
   await chronicle(g, {
@@ -392,4 +403,21 @@ export async function setAnnouncement(g: G, clan: ClanRow, actor: PlayerRef, bod
     await clanActivity(g, clan.id, 'announcement', `${actor.nickname} posted an announcement.`);
     await notifyClan(g, clan.id, { type: 'clan', title: `Announcement from ${actor.nickname}`, body: clean, link: '/game/clan' }, actor.id);
   }
+}
+
+/** Choose the clan's doctrine (§10). Only the leader decides, and a doctrine must be kept for a while. */
+export async function setDoctrine(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, doctrine: string): Promise<void> {
+  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the leader chooses the clan doctrine', 403);
+  if (!(DOCTRINES as readonly string[]).includes(doctrine)) throw invalid('Unknown doctrine');
+  if (clan.doctrine === doctrine) throw conflict('DOCTRINE_UNCHANGED', 'The clan already follows that doctrine');
+  if (clan.doctrine && clan.doctrine_set_at) {
+    const free = addMs(new Date(clan.doctrine_set_at), gameMs(g, DOCTRINE_COOLDOWN_HOURS * 60));
+    if (free.getTime() > g.now.getTime()) throw conflict('DOCTRINE_COOLDOWN', 'A doctrine must be followed for three days before the clan can turn to another');
+  }
+  await g.tx.query('UPDATE clans SET doctrine = $2, doctrine_set_at = $3 WHERE id = $1', [clan.id, doctrine, g.now]);
+  const def = DOCTRINE_DEFS[doctrine as keyof typeof DOCTRINE_DEFS];
+  await clanActivity(g, clan.id, 'doctrine', `${actor.nickname} set the clan on the ${def.name}.`);
+  await notifyClan(g, clan.id, { type: 'clan', title: `The clan follows the ${def.name}`, body: `${def.motto} ${def.summary}`, link: '/game/clan' }, actor.player_id);
+  await emit(g, WORLD_ROOM, 'clan:directory', { clanId: clan.id });
+  await audit(g, 'clan.doctrine', { type: 'clan', id: clan.id }, clan.id, { doctrine });
 }

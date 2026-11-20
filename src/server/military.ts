@@ -1,3 +1,4 @@
+import { TACTICS, TACTIC_DEFS, tacticBlockReason, type TacticId } from '@/game/strategy';
 import {
   TERRAIN_INFO,
   UNITS,
@@ -36,7 +37,10 @@ import {
   loadActiveWars,
   loadArmies,
   loadBuildings,
+  alliesOf,
+  loadActivePacts,
   loadMods,
+  loadProgress,
   loadProvinces,
   type ClanRow,
   type ProvinceRow,
@@ -186,13 +190,18 @@ export async function planMarch(
     }
   }
 
+  // Armies march through the clan's own land and, by treaty, through the land of its allies.
+  const allies = alliesOf(await loadActivePacts(g.tx, g.now), clan.id);
   const codes = findRoute(
     from.code,
     target.code,
-    (code) => byCode.get(code)?.owner_clan_id === clan.id,
+    (code) => {
+      const owner = byCode.get(code)?.owner_clan_id;
+      return !!owner && (owner === clan.id || allies.has(owner));
+    },
     (code) => TERRAIN_INFO[byCode.get(code)!.terrain].travel,
   );
-  if (!codes) return fail('No route: armies may only march through provinces you hold');
+  if (!codes) return fail('No route: armies may only march through provinces you or your allies hold');
   plan.route = codes.map((c) => byCode.get(c)!);
 
   if (totalUnits(units) <= 0) return fail('Choose the soldiers to send');
@@ -210,6 +219,15 @@ export async function planMarch(
   return { ...plan, ok: true, reason: null };
 }
 
+export interface DispatchOptions {
+  /** The tactic the army attacks with (see src/game/strategy.ts). Ignored for a move. */
+  tactic?: string;
+  /** The war plan this attack carries out. */
+  planId?: string | null;
+  /** Multiplier on the supplies, from the plan's logistics officer. */
+  supplyFactor?: number;
+}
+
 /**
  * Give a march order. `expected` is what the endpoint is for — moving between
  * own provinces, or attacking — and the server refuses if the target says otherwise.
@@ -223,6 +241,7 @@ export async function dispatchArmy(
   toId: string,
   unitsInput: Partial<Record<string, number>>,
   expected: 'move' | 'attack',
+  options: DispatchOptions = {},
 ): Promise<string> {
   const plan = await planMarch(g, clan, fromId, toId, unitsInput);
   if (!plan.ok || !plan.from || !plan.target) throw conflict('MARCH_BLOCKED', plan.reason ?? 'This order cannot be carried out');
@@ -232,6 +251,19 @@ export async function dispatchArmy(
       expected === 'move' ? 'You can only move troops to a province you hold. To take another province, attack it.' : 'You already hold that province.',
     );
   }
+
+  // The tactic must be one this host and this clan can actually carry out.
+  let tactic: TacticId = 'assault';
+  if (plan.intent === 'attack' && options.tactic && options.tactic !== 'assault') {
+    if (!(TACTICS as readonly string[]).includes(options.tactic)) throw invalid('Unknown tactic');
+    tactic = options.tactic as TacticId;
+    const progress = (await loadProgress(g.tx, clan.id, commanderId)).get(clan.id);
+    const levels = progress?.levels ?? { military: 1, leadership: 1, economy: 1, intelligence: 1, culture: 1 };
+    const blocked = tacticBlockReason(tactic, plan.units, levels, plan.target.terrain);
+    if (blocked) throw conflict('TACTIC_BLOCKED', `${TACTIC_DEFS[tactic].name}: ${blocked}`);
+  }
+  const tacticDef = TACTIC_DEFS[tactic];
+  const supplies = Math.ceil(plan.supplies * tacticDef.supplyFactor * (options.supplyFactor ?? 1));
 
   // Lock the garrison, then deduct: the conditional updates make double-sending impossible.
   const garrison = await one<{ id: string }>(
@@ -245,12 +277,15 @@ export async function dispatchArmy(
   const arrivesAt = addMs(g.now, gameMs(g, plan.minutes));
   const army = await one<{ id: string }>(
     g.tx,
-    `INSERT INTO armies (clan_id, province_id, status, intent, target_province_id, path, departed_at, arrives_at, commander_player_id)
-     VALUES ($1, $2, 'marching', $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [clan.id, plan.from.id, plan.intent, plan.target.id, JSON.stringify(plan.route.map((p) => p.id)), g.now, arrivesAt, commanderId],
+    `INSERT INTO armies (clan_id, province_id, status, intent, target_province_id, path, departed_at, arrives_at, commander_player_id, tactic, plan_id)
+     VALUES ($1, $2, 'marching', $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+    [clan.id, plan.from.id, plan.intent, plan.target.id, JSON.stringify(plan.route.map((p) => p.id)), g.now, arrivesAt, commanderId, tactic, options.planId ?? null],
   );
   await addUnitsToArmy(g.tx, army!.id, plan.units);
-  if (plan.supplies > 0) await spend(g, clan.id, { food: plan.supplies }, 'march_supplies', { type: 'army', id: army!.id });
+  if (supplies > 0) await spend(g, clan.id, { food: supplies }, 'march_supplies', { type: 'army', id: army!.id });
+  if (Object.values(tacticDef.cost).some((v) => (v ?? 0) > 0)) {
+    await spend(g, clan.id, tacticDef.cost, 'tactic_preparation', { type: 'army', id: army!.id });
+  }
 
   if (plan.intent === 'attack' && plan.target.owner_clan_id) {
     // Taking the field against another clan ends the newcomer's protection.
@@ -267,7 +302,9 @@ export async function dispatchArmy(
     from: plan.from.code,
     to: plan.target.code,
     units: plan.units,
-    supplies: plan.supplies,
+    supplies,
+    tactic,
+    planId: options.planId ?? null,
   });
   return army!.id;
 }

@@ -93,6 +93,11 @@ import {
 } from './rows';
 import { addMs, gameMs, loadWorldState, worldMeta, type WorldStateRow } from './world';
 import type { Membership } from './auth';
+import { DOCTRINES, type DoctrineId, type PactType } from '@/game/clan';
+import { STANCES, STANCE_PREP_MINUTES, TACTICS, stanceBlockReason, type TacticId } from '@/game/strategy';
+import { pactBlockReason } from './pacts';
+import { loadActivePacts, pactBetween, type PactRow } from './rows';
+import { effectiveStance, pendingStance } from './stance';
 import { buildPersonal, buildPlayerRanking, membershipDTO, unreadMessages } from './clanviews';
 import { getPurse } from './purse';
 
@@ -129,6 +134,7 @@ export interface WorldView {
   armies: ArmyRow[];
   progress: Map<string, ClanProgress>;
   wars: WarRow[];
+  pacts: PactRow[];
   stats: Map<string, ClanStats>;
 }
 
@@ -139,7 +145,7 @@ async function requireState(db: Db): Promise<WorldStateRow> {
 }
 
 export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
-  const [state, clans, nickRows, provinces, buildings, armies, progress, wars] = await Promise.all([
+  const [state, clans, nickRows, provinces, buildings, armies, progress, wars, pacts] = await Promise.all([
     requireState(db),
     loadClans(db),
     rows<{ clan_id: string; nickname: string; members: number }>(
@@ -152,6 +158,7 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
     loadArmies(db),
     loadProgress(db),
     rows<WarRow>(db, `SELECT * FROM wars WHERE status = 'active' ORDER BY declared_at`),
+    loadActivePacts(db, now),
   ]);
   const stats = new Map<string, ClanStats>();
   for (const clan of clans) {
@@ -168,7 +175,7 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
       pillarTotal,
       // Public score: land, people and the Daimyo's learning. Army strength is deliberately left out —
       // every other term is public, so including it would let anyone read a rival's strength off the ranking.
-      score: own.length * 1000 + Math.floor(population / 10) + pillarTotal * 50,
+      score: own.length * 1000 + Math.floor(population / 10) + pillarTotal * 50 + clan.victories * 100,
     });
   }
   return {
@@ -183,6 +190,7 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
     armies,
     progress,
     wars,
+    pacts,
     stats,
   };
 }
@@ -202,6 +210,9 @@ export function clanPublic(view: WorldView, clan: ClanRow): ClanPublicDTO {
     recruitment: clan.recruitment,
     language: clan.language,
     memberCount: view.memberCounts.get(clan.id) ?? 0,
+    doctrine: (DOCTRINES as readonly string[]).includes(clan.doctrine ?? '') ? (clan.doctrine as DoctrineId) : null,
+    victories: clan.victories,
+    defeats: clan.defeats,
     status: clan.status,
     provinceCount: stats?.provinceCount ?? 0,
     capitalProvinceId: clan.capital_province_id,
@@ -294,7 +305,8 @@ function relationOf(view: WorldView, clan: ClanRow | null, p: ProvinceRow): Prov
   if (!p.owner_clan_id) return 'unclaimed';
   if (!clan) return 'foreign';
   if (p.owner_clan_id === clan.id) return 'own';
-  return atWar(view.wars, clan.id, p.owner_clan_id) ? 'enemy' : 'foreign';
+  if (atWar(view.wars, clan.id, p.owner_clan_id)) return 'enemy';
+  return pactBetween(view.pacts, clan.id, p.owner_clan_id)?.type === 'alliance' ? 'allied' : 'foreign';
 }
 
 function garrisonAt(view: WorldView, p: ProvinceRow): ArmyRow | undefined {
@@ -319,7 +331,10 @@ function provinceSummary(
   let strength: ProvinceSummaryDTO['strength'] = null;
   if (!own && clan) {
     const report = intel.get(p.id);
-    if (report) strength = { label: strengthLabel(report.power), exact: true, power: report.power };
+    // Allies show each other their garrisons.
+    const alliedPower = relation === 'allied' ? armyPower(garrison?.units ?? {}) : null;
+    if (alliedPower !== null) strength = { label: strengthLabel(alliedPower), exact: true, power: alliedPower };
+    else if (report) strength = { label: strengthLabel(report.power), exact: true, power: report.power };
     else if (bordersClan(view, clan.id, p)) strength = { label: strengthLabel(armyPower(garrison?.units ?? {})), exact: false, power: null };
   }
   const owner = p.owner_clan_id ? view.clans.find((c) => c.id === p.owner_clan_id) : null;
@@ -511,6 +526,16 @@ export async function buildProvince(db: Db, viewer: Viewer, provinceId: string, 
       garrison: garrisonAt(view, p)?.units ?? emptyUnits(),
       recruitment: queue.filter((o) => o.provinceId === p.id),
       recruitOptions,
+      stance: (() => {
+        const pending = pendingStance(p, now);
+        const garrisonTotal = totalUnits(garrisonAt(view, p)?.units ?? emptyUnits());
+        return {
+          current: effectiveStance(p, now),
+          pending: pending ? { stance: pending.stance, readyAt: pending.readyAt.toISOString() } : null,
+          options: STANCES.map((id) => ({ id, blockedReason: stanceBlockReason(id, p.terrain, garrisonTotal) })),
+          prepMs: gameMs(speed, STANCE_PREP_MINUTES),
+        };
+      })(),
       festival: {
         cost: scaleBag(WORLD.festival.cost, 1),
         loyaltyGain: Math.round(WORLD.festival.loyalty * (1 + mods.festival)),
@@ -603,6 +628,8 @@ export async function buildMovement(db: Db, clanId: string, armyId: string): Pro
 }
 
 interface BattleListRow extends BattleRow {
+  tactic: string;
+  plan_id: string | null;
   province_name: string;
   attacker_name: string;
   defender_name: string | null;
@@ -633,6 +660,9 @@ function toBattleSummary(b: BattleListRow, clanId: string): BattleSummaryDTO {
     defenderClanId: b.defender_clan_id,
     defenderName: b.defender_name ?? `Warriors of ${b.province_name}`,
     role: b.attacker_clan_id === clanId ? 'attacker' : 'defender',
+    // The defender learns the tactic from the battle report, not before.
+    tactic: (b.attacker_clan_id === clanId || b.status === 'resolved') && (TACTICS as readonly string[]).includes(b.tactic) ? (b.tactic as TacticId) : 'assault',
+    planId: b.attacker_clan_id === clanId ? b.plan_id ?? null : null,
     status: b.status,
     startedAt: b.started_at.toISOString(),
     resolvesAt: b.resolves_at.toISOString(),
@@ -673,9 +703,9 @@ export async function buildBattle(db: Db, clan: ClanRow, battleId: string): Prom
 export async function buildDiplomacy(db: Db, clan: ClanRow, now: Date): Promise<DiplomacyResponse> {
   const view = await loadWorldView(db, now);
   const mods = view.progress.get(clan.id)?.mods ?? emptyModifiers();
-  const proposals = await rows<{ id: string; from_clan_id: string; to_clan_id: string }>(
+  const proposals = await rows<{ id: string; type: 'peace' | PactType; from_clan_id: string; to_clan_id: string }>(
     db,
-    `SELECT id, from_clan_id, to_clan_id FROM diplomacy WHERE status = 'pending' AND expires_at > $2 AND (from_clan_id = $1 OR to_clan_id = $1)`,
+    `SELECT id, type, from_clan_id, to_clan_id FROM diplomacy WHERE status = 'pending' AND expires_at > $2 AND (from_clan_id = $1 OR to_clan_id = $1)`,
     [clan.id, now],
   );
   const cost = warCost(mods.warCost);
@@ -687,11 +717,20 @@ export async function buildDiplomacy(db: Db, clan: ClanRow, now: Date): Promise<
     const war = atWar(view.wars, clan.id, other.id);
     let reason = war ? 'You are already at war' : await warBlockReason(ctx, clan, other, view.wars);
     if (!reason && gold < cost) reason = `Declaring war costs ${cost} gold`;
-    const incoming = proposals.find((p) => p.from_clan_id === other.id && p.to_clan_id === clan.id);
-    const outgoing = proposals.find((p) => p.from_clan_id === clan.id && p.to_clan_id === other.id);
+    const incoming = proposals.find((p) => p.type === 'peace' && p.from_clan_id === other.id && p.to_clan_id === clan.id);
+    const outgoing = proposals.find((p) => p.type === 'peace' && p.from_clan_id === clan.id && p.to_clan_id === other.id);
+    const pact = pactBetween(view.pacts, clan.id, other.id);
+    const pendingPacts = proposals
+      .filter((p) => p.type !== 'peace' && (p.from_clan_id === other.id || p.to_clan_id === other.id))
+      .map((p) => ({ proposalId: p.id, type: p.type as PactType, direction: p.from_clan_id === other.id ? ('incoming' as const) : ('outgoing' as const) }));
+    const offered = (type: PactType) => (pendingPacts.some((p) => p.type === type) ? 'An offer is already waiting for an answer' : null);
     clans.push({
       clan: clanPublic(view, other),
-      relation: war ? ('war' as const) : ('neutral' as const),
+      relation: war ? ('war' as const) : pact ? pact.type : ('neutral' as const),
+      pact: pact ? { id: pact.id, type: pact.type, startedAt: pact.started_at.toISOString(), endsAt: pact.ends_at ? pact.ends_at.toISOString() : null } : null,
+      pendingPacts,
+      napBlockedReason: offered('nap') ?? (await pactBlockReason(ctx, clan, other, 'nap', view.pacts)),
+      allianceBlockedReason: offered('alliance') ?? (await pactBlockReason(ctx, clan, other, 'alliance', view.pacts)),
       warId: war?.id ?? null,
       canDeclareWar: !reason,
       declareBlockedReason: reason,

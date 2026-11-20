@@ -1,6 +1,8 @@
+import { STANCE_DEFS } from '@/game/strategy';
+import { effectiveStance, npcStance } from './stance';
 import { randomUUID } from 'node:crypto';
 import type { IntelDTO } from '@/game/api';
-import { WORLD, armyPower, emptyBuildingLevels, emptyUnits } from '@/game/config';
+import { WORLD, armyPower, emptyBuildingLevels, emptyUnits, totalUnits } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
 import type { Modifiers } from '@/game/pillars';
 import { createRng } from '@/game/rng';
@@ -85,6 +87,9 @@ export async function resolveEspionage(g: G, opId: string): Promise<void> {
     const garrison = await getGarrison(g.tx, province.id, province.owner_clan_id);
     const levels = levelsByProvince(await loadBuildings(g.tx, province.id)).get(province.id) ?? emptyBuildingLevels();
     const units = garrison?.units ?? emptyUnits();
+    // How the province is held right now. For land nobody commands this holds until the next dawn.
+    const owner = province.owner_clan_id ? await one<{ is_npc: boolean }>(g.tx, 'SELECT is_npc FROM clans WHERE id = $1', [province.owner_clan_id]) : null;
+    const stance = owner && !owner.is_npc ? effectiveStance(province, g.now) : npcStance(province, totalUnits(units), g.tick);
     expiresAt = addMs(g.now, gameMs(g, WORLD.scout.reportHours * 60 * (1 + mods.reportDuration)));
     report = {
       operationId: op.id,
@@ -95,6 +100,8 @@ export async function resolveEspionage(g: G, opId: string): Promise<void> {
       castleLevel: levels.castle,
       buildings: levels,
       loyalty: Math.round(province.loyalty),
+      stance,
+      stanceName: STANCE_DEFS[stance].name,
       ownerResources: province.owner_clan_id ? await getResources(g.tx, province.owner_clan_id) : null,
     };
   }

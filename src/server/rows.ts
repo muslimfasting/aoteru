@@ -13,7 +13,7 @@ import {
   type Terrain,
   type UnitCounts,
 } from '@/game/config';
-import { SEAT_OF_PILLAR, type ClanRole, type RecruitmentMode } from '@/game/clan';
+import { SEAT_OF_PILLAR, applyDoctrine, type ClanRole, type RecruitmentMode } from '@/game/clan';
 import { PILLARS, SKILLS, computeModifiers, emptyModifiers, type Modifiers, type PillarId, type SkillRanks } from '@/game/pillars';
 import { rows, type Db } from './db';
 
@@ -43,6 +43,8 @@ export interface ClanRow {
   announcement: string | null;
   announcement_at: Date | null;
   announcement_by: string | null;
+  victories: number;
+  defeats: number;
 }
 
 export interface MemberRow {
@@ -72,6 +74,10 @@ export interface ProvinceRow {
   is_start_slot: boolean;
   last_festival_at: Date | null;
   owner_since: Date | null;
+  /** Stance in force until `stance_ready_at`; see `effectiveStance`. */
+  stance: string;
+  stance_next: string | null;
+  stance_ready_at: Date | null;
 }
 
 export interface BuildingRow {
@@ -95,6 +101,8 @@ export interface ArmyRow {
   arrives_at: Date | null;
   /** The member who led this army out, if any. */
   commander_player_id: string | null;
+  tactic: string;
+  plan_id: string | null;
   units: UnitCounts;
 }
 
@@ -157,7 +165,7 @@ export function levelsByProvince(buildings: BuildingRow[]): Map<string, Building
 
 const ARMY_SELECT = `
   SELECT a.id, a.clan_id, a.province_id, a.status, a.intent, a.target_province_id, a.path,
-         a.departed_at, a.arrives_at, a.commander_player_id,
+         a.departed_at, a.arrives_at, a.commander_player_id, a.tactic, a.plan_id,
          COALESCE(jsonb_object_agg(u.unit_type, u.count) FILTER (WHERE u.unit_type IS NOT NULL), '{}'::jsonb) AS units
   FROM armies a
   LEFT JOIN army_units u ON u.army_id = a.id`;
@@ -303,6 +311,17 @@ export async function loadProgress(db: Db, clanId?: string, commanderId?: string
     }
     for (const [id, list] of byClan) out.set(id, composeProgress(list, people, commanderId));
   }
+
+  // The clan's doctrine shifts its modifiers.
+  const doctrines = await rows<{ id: string; doctrine: string }>(
+    db,
+    `SELECT id, doctrine FROM clans WHERE doctrine IS NOT NULL ${clanId ? 'AND id = $1' : ''}`,
+    params,
+  );
+  for (const d of doctrines) {
+    const p = out.get(d.id);
+    if (p) p.mods = applyDoctrine(p.mods, d.doctrine);
+  }
   return out;
 }
 
@@ -319,6 +338,40 @@ export async function loadMembers(db: Db, clanId: string): Promise<MemberRow[]> 
 
 export async function loadActiveWars(db: Db): Promise<WarRow[]> {
   return rows<WarRow>(db, `SELECT * FROM wars WHERE status = 'active' ORDER BY declared_at`);
+}
+
+export interface PactRow {
+  id: string;
+  type: 'nap' | 'alliance';
+  clan_a: string;
+  clan_b: string;
+  status: 'active' | 'ended';
+  started_at: Date;
+  ends_at: Date | null;
+  ended_at: Date | null;
+  end_reason: string | null;
+  broken_by: string | null;
+}
+
+/** Treaties in force at `now` (a pact past its end date no longer binds, even before the tick tidies it away). */
+export async function loadActivePacts(db: Db, now?: Date): Promise<PactRow[]> {
+  const all = await rows<PactRow>(db, `SELECT * FROM pacts WHERE status = 'active' ORDER BY started_at`);
+  return now ? all.filter((p) => !p.ends_at || p.ends_at.getTime() > now.getTime()) : all;
+}
+
+export function pactBetween(pacts: PactRow[], a: string, b: string): PactRow | null {
+  return pacts.find((p) => p.status === 'active' && ((p.clan_a === a && p.clan_b === b) || (p.clan_a === b && p.clan_b === a))) ?? null;
+}
+
+/** Clans allied with `clanId`. */
+export function alliesOf(pacts: PactRow[], clanId: string): Set<string> {
+  const out = new Set<string>();
+  for (const p of pacts) {
+    if (p.status !== 'active' || p.type !== 'alliance') continue;
+    if (p.clan_a === clanId) out.add(p.clan_b);
+    else if (p.clan_b === clanId) out.add(p.clan_a);
+  }
+  return out;
 }
 
 export function atWar(wars: WarRow[], a: string, b: string): WarRow | null {

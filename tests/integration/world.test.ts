@@ -24,26 +24,34 @@ import type { PlayerDTO } from '@/game/api';
 import { simulateBattle } from '@/game/battle';
 import { CLAN_PERMISSIONS, type ClanPermission, type ClanRole } from '@/game/clan';
 import { WORLD, buildingCost, totalUnits, unitCost, type UnitCounts } from '@/game/config';
+import { PROVINCE_BY_CODE } from '@/game/map';
+import { STANCE_PREP_MINUTES } from '@/game/strategy';
 import { advanceWorld } from '@/server/advance';
-import { getGarrison } from '@/server/armies';
+import { addUnitsToArmy, getGarrison } from '@/server/armies';
 import { register } from '@/server/auth';
 import { resolveBattle, verifyBattle } from '@/server/battles';
 import { startUpgrade } from '@/server/buildings';
 import { createClan } from '@/server/clans';
 import { closePool, one, pool, rows, withWorldLock, type Db } from '@/server/db';
-import { declareWar, proposePeace, respondPeace } from '@/server/diplomacy';
+import { declareWar, proposePeace, respondPeace, warBlockReason } from '@/server/diplomacy';
 import { getResources, grant } from '@/server/economy';
 import { GameError } from '@/server/errors';
 import { executeScout } from '@/server/espionage';
+import { hasPermission } from '@/server/http';
+import { joinClan, setDoctrine, setRole } from '@/server/members';
+import { breakPact, proposePact, respondProposal } from '@/server/pacts';
+import { effectiveStance, setStance } from '@/server/stance';
+import { assignDuty, createPlan, launchPlan, respondDuty, setPlanStatus, updatePlan } from '@/server/warcouncil';
+import { buildWarCouncil } from '@/server/warviews';
 import { dispatchArmy, planMarch, recruit } from '@/server/military';
 import { getPillars, unlockSkill } from '@/server/progression';
-import type { ClanRow, ProvinceRow } from '@/server/rows';
+import { loadArmies, loadMods, type ClanRow, type MemberRow, type ProvinceRow } from '@/server/rows';
 import { processTick } from '@/server/tick';
-import { buildBattle, buildBattles, buildMap, buildMe, buildProvince, buildSync, type Viewer } from '@/server/views';
+import { buildBattle, buildBattles, buildDiplomacy, buildMap, buildMe, buildProvince, buildSync, type Viewer } from '@/server/views';
 import { gameContext, loadWorldState, type G } from '@/server/world';
 
 // Virtual clock. At speed 60 one game minute is one real second.
-let clock = Date.now() - 3 * 3600_000;
+let clock = Date.now() - 8 * 3600_000;
 const now = () => new Date(clock);
 const GAME_MINUTE = 1000;
 
@@ -557,6 +565,284 @@ describe('persistent world', () => {
   });
 });
 
+describe('the art of war', () => {
+  const meta = { ip: null, userAgent: null };
+  /** Run a member's order as the API does: membership and clan re-read and locked inside the transaction. */
+  async function orderAs<T>(playerId: string, fn: (g: G, clan: ClanRow, member: MemberRow) => Promise<T>): Promise<T> {
+    return withWorldLock(async (tx: Db) => {
+      const g = await gameContext(tx, now(), playerId);
+      const member = (await one<MemberRow>(tx, 'SELECT player_id, clan_id, role, joined_at, contribution FROM clan_members WHERE player_id = $1 FOR UPDATE', [playerId]))!;
+      const clan = (await one<ClanRow>(tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [member.clan_id]))!;
+      return fn(g, clan, member);
+    });
+  }
+  let naoe: PlayerDTO;
+  let kojima: PlayerDTO;
+
+  it('plans an attack in the war council and fights it with the chosen tactic', async () => {
+    const c1 = await clanOf(p1.id);
+    naoe = (await register({ email: 'naoe@example.com', password: 'long enough pw', nickname: 'Naoe' }, meta)).player;
+    kojima = (await register({ email: 'kojima@example.com', password: 'long enough pw', nickname: 'Kojima' }, meta)).player;
+    await db().query(`UPDATE clans SET recruitment = 'open' WHERE id = $1`, [c1.id]);
+    for (const p of [naoe, kojima]) {
+      await withWorldLock(async (tx: Db) => joinClan(await gameContext(tx, now(), p.id), p, c1.id));
+    }
+    await orderAs(p1.id, (g, clan, m) => setRole(g, clan, { ...m, nickname: p1.nickname }, naoe.id, 'strategist'));
+    await orderAs(p1.id, (g, clan, m) => setRole(g, clan, { ...m, nickname: p1.nickname }, kojima.id, 'samurai'));
+    // Kojima is the clan's best soldier, though he holds no office.
+    await db().query(`UPDATE player_pillars SET level = 8 WHERE player_id = $1 AND pillar = 'military'`, [kojima.id]);
+    const strategist = (await one<MemberRow>(db(), 'SELECT * FROM clan_members WHERE player_id = $1', [naoe.id]))!;
+    const samurai = (await one<MemberRow>(db(), 'SELECT * FROM clan_members WHERE player_id = $1', [kojima.id]))!;
+    expect(await hasPermission(db(), strategist, 'war_plans')).toBe(true);
+    expect(await hasPermission(db(), strategist, 'command')).toBe(false);
+    expect(await hasPermission(db(), samurai, 'war_plans')).toBe(false);
+
+    // A province of the clan with unclaimed land next to it.
+    const mine = await rows<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE owner_clan_id = $1 ORDER BY code', [c1.id]);
+    let origin: ProvinceRow | null = null;
+    let target: ProvinceRow | null = null;
+    for (const p of mine) {
+      for (const code of PROVINCE_BY_CODE[p.code].neighbors) {
+        const q = await province(code);
+        if (!q.owner_clan_id && !origin) {
+          origin = p;
+          target = q;
+        }
+      }
+    }
+    expect(origin, 'the clan borders unclaimed land').not.toBeNull();
+    const from = origin!;
+    const to = target!;
+    const garrison = (await getGarrison(db(), from.id, c1.id))!;
+    await addUnitsToArmy(db(), garrison.id, { ashigaru: 900, cavalry: 300, archer: 200 });
+    await withWorldLock(async (tx: Db) => grant(await gameContext(tx, now()), c1.id, { food: 40000, gold: 5000 }, 'test_grant'));
+    const host = { ashigaru: 800, cavalry: 250, archer: 150 };
+    const planned = await planMarch({ tx: db(), now: now() }, c1, from.id, to.id, host);
+    expect(planned.ok).toBe(true);
+
+    // The strategist drafts the plan, names the commander and hands out duties.
+    const actor = { id: naoe.id, nickname: 'Naoe' };
+    const draft = { title: `Take ${to.name}`, targetProvinceId: to.id, originProvinceId: from.id, units: host, commanderId: kojima.id, notes: 'Withdraw if the vanguard breaks.' };
+    const planId = await orderAs(naoe.id, (g, clan) => createPlan(g, clan, actor, { ...draft, tactic: 'night_raid' }));
+    await expectRefused(orderAs(naoe.id, (g, clan) => createPlan(g, clan, actor, { ...draft, originProvinceId: to.id, tactic: 'assault' })), 'PLAN_INVALID');
+    await orderAs(naoe.id, (g, clan) => assignDuty(g, clan, actor, planId, p1.id, 'logistics', 'Keep the carts moving.'));
+    await orderAs(naoe.id, (g, clan) => assignDuty(g, clan, actor, planId, p1.id, 'reinforcement', ''));
+    await expectRefused(orderAs(naoe.id, (g, clan) => assignDuty(g, clan, actor, planId, p1.id, 'logistics', '')), 'ALREADY_ASSIGNED');
+    await expectRefused(orderAs(naoe.id, (g, clan) => assignDuty(g, clan, actor, planId, p2.id, 'scout', '')), 'NOT_A_MEMBER');
+
+    let council = await buildWarCouncil(db(), await viewerOf(kojima), now());
+    let plan = council.plans.find((x) => x.id === planId)!;
+    expect(plan.assignments.find((a) => a.duty === 'commander')).toMatchObject({ nickname: 'Kojima', status: 'assigned', isYou: true });
+    expect(plan.assignments.find((a) => a.duty === 'strategist')).toMatchObject({ nickname: 'Naoe', status: 'accepted' });
+    expect(plan.canEdit).toBe(false);
+    expect(plan.canLaunch).toBe(false);
+    expect(plan.launch.ok).toBe(false);
+
+    // Not before the council calls it ready; not by someone with no part in it; not without the commander's word.
+    const launchAs = (p: PlayerDTO, mayCommand: boolean) => orderAs(p.id, (g, clan, m) => launchPlan(g, clan, { ...m, nickname: p.nickname }, planId, mayCommand));
+    await expectRefused(launchAs(kojima, false), 'PLAN_NOT_READY');
+    await orderAs(naoe.id, (g, clan) => setPlanStatus(g, clan, actor, planId, 'ready'));
+    await expectRefused(launchAs(naoe, false), 'FORBIDDEN_ROLE');
+    await expectRefused(launchAs(p1, true), 'PLAN_INCOMPLETE');
+    // The clan has not the skill for a night raid: the order is refused when it is given.
+    await expectRefused(launchAs(kojima, false), 'TACTIC_BLOCKED');
+    expect(await count(`armies WHERE plan_id = $1`, [planId])).toBe(0);
+    expect((await one<{ status: string }>(db(), 'SELECT status FROM war_plans WHERE id = $1', [planId]))!.status).toBe('ready');
+
+    await orderAs(naoe.id, (g, clan) => updatePlan(g, clan, actor, planId, { ...draft, tactic: 'flanking' }));
+    await orderAs(p1.id, (g, clan) => respondDuty(g, clan, { id: p1.id, nickname: p1.nickname }, planId, 'logistics', true));
+    await orderAs(p1.id, (g, clan) => respondDuty(g, clan, { id: p1.id, nickname: p1.nickname }, planId, 'reinforcement', true));
+    council = await buildWarCouncil(db(), await viewerOf(naoe), now());
+    plan = council.plans.find((x) => x.id === planId)!;
+    expect(plan.tactic).toBe('flanking');
+    expect(plan.bonuses.supplyFactor).toBe(0.8);
+    expect(plan.bonuses.morale).toBe(4);
+    expect(plan.bonuses.filled).toEqual(expect.arrayContaining(['strategist', 'logistics', 'reinforcement']));
+    expect(plan.chance).toBeGreaterThan(0.8);
+    expect(plan.canEdit).toBe(true);
+
+    // The commander launches. The army carries the plan, its tactic and its commander.
+    const armyId = await launchAs(kojima, false);
+    const army = (await loadArmies(db(), 'a.id = $1', [armyId]))[0];
+    expect(army).toMatchObject({ tactic: 'flanking', plan_id: planId, commander_player_id: kojima.id, status: 'marching' });
+    const supplies = await one<{ amount: number }>(db(), `SELECT amount FROM transactions WHERE reason = 'march_supplies' AND ref_id = $1`, [armyId]);
+    expect(-supplies!.amount).toBe(Math.ceil(planned.supplies * 0.8));
+    await expectRefused(launchAs(kojima, false), 'PLAN_CLOSED');
+    await expectRefused(orderAs(naoe.id, (g, clan) => updatePlan(g, clan, actor, planId, { ...draft, tactic: 'assault' })), 'PLAN_CLOSED');
+
+    clock = army.arrives_at!.getTime();
+    await pass(1);
+    await pass(WORLD.battleMinutes + 2);
+    const battle = (await one<any>(db(), 'SELECT * FROM battles WHERE plan_id = $1', [planId]))!;
+    expect(battle.status).toBe('resolved');
+    expect(battle.tactic).toBe('flanking');
+    expect(battle.commander_player_id).toBe(kojima.id);
+    const strategy = battle.inputs.strategy;
+    expect(strategy.tactic).toBe('flanking');
+    expect(strategy.tacticName).toBe('Flanking');
+    expect(battle.inputs.attacker.commander).toBe('Kojima');
+    // Flanking breaks on a Defensive Formation and is otherwise decided by the seeded roll.
+    if (strategy.stance === 'formation') {
+      expect(strategy.tacticResult).toBe('countered');
+      expect(strategy.attacker.attack).toBeLessThan(0);
+    } else {
+      expect(['succeeded', 'failed']).toContain(strategy.tacticResult);
+      expect(strategy.chance).toBeGreaterThan(0.8);
+    }
+    expect(strategy.notes.length).toBeGreaterThan(0);
+    // The army fought with its commander's own Military pillar, not the leader's.
+    const withCommander = await loadMods(db(), c1.id, kojima.id);
+    const withoutHim = await loadMods(db(), c1.id);
+    expect(withCommander.attack).not.toBeCloseTo(withoutHim.attack, 5);
+    expect(battle.inputs.attacker.mods.attack).toBeCloseTo(withCommander.attack + strategy.attacker.attack, 5);
+    expect(battle.inputs.attacker.mods.attack).not.toBeCloseTo(withoutHim.attack + strategy.attacker.attack, 5);
+    // The record reproduces, strategy and all.
+    const report = (await one<{ result: any }>(db(), 'SELECT result FROM battle_reports WHERE battle_id = $1', [battle.id]))!;
+    expect(verifyBattle(battle.inputs, battle.seed, report.result)).toBe(true);
+
+    // The plan is closed with the outcome, everyone who served is told, and the records are kept.
+    const done = (await one<{ status: string; outcome: string; battle_id: string }>(db(), 'SELECT status, outcome, battle_id FROM war_plans WHERE id = $1', [planId]))!;
+    expect(done).toMatchObject({ status: 'completed', outcome: report.result.outcome, battle_id: battle.id });
+    // One report per member, however many duties they held.
+    expect(await count(`notifications WHERE player_id = $1 AND link = $2 AND title LIKE 'War plan%'`, [p1.id, `/game/battles/${battle.id}`])).toBe(1);
+    expect(await count(`notifications WHERE player_id = $1 AND link = $2 AND title LIKE 'War plan%'`, [naoe.id, `/game/battles/${battle.id}`])).toBe(1);
+    expect((await one<{ battles_led: number }>(db(), 'SELECT battles_led FROM players WHERE id = $1', [kojima.id]))!.battles_led).toBe(1);
+    const record = (await one<{ victories: number; defeats: number }>(db(), 'SELECT victories, defeats FROM clans WHERE id = $1', [c1.id]))!;
+    if (report.result.winner !== 'none') expect(record.victories + record.defeats).toBeGreaterThan(0);
+    const list = await buildBattles(db(), await clanOf(p1.id));
+    expect(list.battles.find((b) => b.id === battle.id)).toMatchObject({ tactic: 'flanking', planId });
+  });
+
+  it('orders a stance that takes time to prepare', async () => {
+    const c1 = await clanOf(p1.id);
+    const capital = (await one<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE id = $1', [c1.capital_province_id]))!;
+    expect(effectiveStance(capital, now())).toBe('formation');
+    await expectRefused(orderAs(p1.id, (g, clan) => setStance(g, clan, capital.id, 'formation')), 'STANCE_UNCHANGED');
+    await orderAs(p1.id, (g, clan) => setStance(g, clan, capital.id, 'night_watch'));
+    // The old order holds until the new one has been prepared.
+    let row = (await one<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE id = $1', [capital.id]))!;
+    expect(effectiveStance(row, now())).toBe('formation');
+    const view = await buildProvince(db(), await viewerOf(p1), capital.id, now());
+    expect(view.own!.stance.current).toBe('formation');
+    expect(view.own!.stance.pending!.stance).toBe('night_watch');
+    await expectRefused(orderAs(p1.id, (g, clan) => setStance(g, clan, capital.id, 'night_watch')), 'STANCE_UNCHANGED');
+    await pass(STANCE_PREP_MINUTES + 1);
+    row = (await one<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE id = $1', [capital.id]))!;
+    expect(effectiveStance(row, now())).toBe('night_watch');
+
+    // Deep stores are paid for; an ambush needs somewhere to hide.
+    const food = (await getResources(db(), c1.id)).food;
+    await orderAs(p1.id, (g, clan) => setStance(g, clan, capital.id, 'stockpile'));
+    expect(await count(`transactions WHERE clan_id = $1 AND reason = 'stance_preparation' AND resource = 'food' AND amount = -250`, [c1.id])).toBe(1);
+    expect((await getResources(db(), c1.id)).food).toBeLessThanOrEqual(food - 250 + 5000);
+    const flat = (await rows<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE owner_clan_id = $1', [c1.id])).find((p) => p.terrain === 'plains' || p.terrain === 'coast');
+    if (flat) await expectRefused(orderAs(p1.id, (g, clan) => setStance(g, clan, flat.id, 'ambush')), 'STANCE_BLOCKED');
+    // Somebody else's province is not yours to order.
+    const theirs = (await one<ProvinceRow>(db(), 'SELECT * FROM provinces WHERE owner_clan_id = $1 LIMIT 1', [(await clanOf(p2.id)).id]))!;
+    await expectRefused(orderAs(p1.id, (g, clan) => setStance(g, clan, theirs.id, 'hold')), 'FORBIDDEN');
+  });
+
+  it('binds clans by treaties, with a price for breaking them', async () => {
+    const c1 = await clanOf(p1.id);
+    const c2 = await clanOf(p2.id);
+    expect(c2.status).toBe('active');
+    await withWorldLock(async (tx: Db) => grant(await gameContext(tx, now()), c1.id, { gold: 5000 }, 'test_grant'));
+    // No treaty while the two are at war: peace comes first.
+    if (await count(`wars WHERE status = 'active' AND attacker_clan_id IN ($1, $2) AND defender_clan_id IN ($1, $2)`, [c1.id, c2.id])) {
+      await expectRefused(order(p1.id, (g, c) => proposePact(g, c, c2.id, 'nap')), 'PACT_BLOCKED');
+      await order(p1.id, (g, c) => proposePeace(g, c, c2.id));
+      const peace = (await one<{ id: string }>(db(), `SELECT id FROM diplomacy WHERE type = 'peace' AND status = 'pending' AND to_clan_id = $1`, [c2.id]))!;
+      await order(p2.id, (g, c) => respondPeace(g, c, peace.id, true));
+    }
+
+    // A non-aggression pact: offered, accepted, and binding.
+    await order(p1.id, (g, c) => proposePact(g, c, c2.id, 'nap'));
+    await expectRefused(order(p1.id, (g, c) => proposePact(g, c, c2.id, 'nap')), 'ALREADY_PROPOSED');
+    let theirs = await buildDiplomacy(db(), c2, now());
+    const offer = theirs.clans.find((x) => x.clan.id === c1.id)!.pendingPacts[0];
+    expect(offer).toMatchObject({ type: 'nap', direction: 'incoming' });
+    await order(p2.id, (g, c) => respondProposal(g, c, offer.proposalId, true));
+    let mine = await buildDiplomacy(db(), c1, now());
+    let entry = mine.clans.find((x) => x.clan.id === c2.id)!;
+    expect(entry.relation).toBe('nap');
+    expect(entry.pact!.endsAt).not.toBeNull();
+    expect(entry.canDeclareWar).toBe(false);
+    await expectRefused(order(p1.id, (g, c) => declareWar(g, c, c2.id)), 'WAR_BLOCKED');
+
+    // An alliance replaces it: allies see each other's garrisons.
+    await order(p2.id, (g, c) => proposePact(g, c, c1.id, 'alliance'));
+    mine = await buildDiplomacy(db(), c1, now());
+    const alliance = mine.clans.find((x) => x.clan.id === c2.id)!.pendingPacts.find((x) => x.type === 'alliance')!;
+    await order(p1.id, (g, c) => respondProposal(g, c, alliance.proposalId, true));
+    expect(await count(`pacts WHERE status = 'active'`)).toBe(1);
+    expect(await count(`pacts WHERE status = 'ended' AND end_reason = 'superseded'`)).toBe(1);
+    const map = await buildMap(db(), await viewerOf(p1), now());
+    const allied = map.provinces.filter((p) => p.ownerClanId === c2.id);
+    expect(allied.length).toBeGreaterThan(0);
+    for (const p of allied) {
+      expect(p.relation).toBe('allied');
+      expect(p.strength).toMatchObject({ exact: true });
+    }
+    entry = (await buildDiplomacy(db(), c1, now())).clans.find((x) => x.clan.id === c2.id)!;
+    expect(entry.relation).toBe('alliance');
+    expect(entry.allianceBlockedReason).not.toBeNull();
+
+    // An old house does not bind itself to a new banner.
+    const npc = (await one<ClanRow>(db(), `SELECT * FROM clans WHERE is_npc AND status = 'active' LIMIT 1`))!;
+    if (await count(`wars WHERE status = 'active' AND attacker_clan_id IN ($1, $2) AND defender_clan_id IN ($1, $2)`, [c1.id, npc.id])) {
+      await expectRefused(order(p1.id, (g, c) => proposePact(g, c, npc.id, 'alliance')), 'PACT_BLOCKED');
+    } else {
+      await order(p1.id, (g, c) => proposePact(g, c, npc.id, 'alliance'));
+      expect(await count(`diplomacy WHERE from_clan_id = $1 AND to_clan_id = $2 AND type = 'alliance' AND status = 'rejected'`, [c1.id, npc.id])).toBe(1);
+    }
+    expect(await count(`pacts WHERE status = 'active' AND (clan_a = $1 OR clan_b = $1)`, [npc.id])).toBe(0);
+
+    // Breaking one's word costs loyalty at home and delays the war it was broken for.
+    const before = await rows<{ id: string; loyalty: number }>(db(), 'SELECT id, loyalty FROM provinces WHERE owner_clan_id = $1 ORDER BY id', [c1.id]);
+    const pactId = entry.pact!.id;
+    await expectRefused(order(p1.id, (g, c) => breakPact(g, c, '00000000-0000-4000-8000-000000000000')), 'NOT_FOUND');
+    await order(p1.id, (g, c) => breakPact(g, c, pactId));
+    const after = await rows<{ id: string; loyalty: number }>(db(), 'SELECT id, loyalty FROM provinces WHERE owner_clan_id = $1 ORDER BY id', [c1.id]);
+    for (const [i, p] of before.entries()) expect(after[i].loyalty).toBeCloseTo(Math.max(0, p.loyalty - 8), 1);
+    expect(await count(`pacts WHERE status = 'active'`)).toBe(0);
+    expect(await count(`world_events WHERE type = 'pact_broken' AND clan_id = $1`, [c1.id])).toBe(1);
+    // (The newcomer's truce would hide the reason we are looking for.)
+    await db().query('UPDATE clans SET protected_until = NULL WHERE id = $1', [c2.id]);
+    const blocked = async () => {
+      const g = { tx: db(), now: now(), speed: 60 };
+      return warBlockReason(g, await clanOf(p1.id), await clanOf(p2.id), await rows(db(), `SELECT * FROM wars WHERE status = 'active'`));
+    };
+    expect(await blocked()).toMatch(/broken your word/);
+    await pass(12 * 60 + 5);
+    expect((await blocked()) ?? '').not.toMatch(/broken your word/);
+
+    // A pact runs out by itself.
+    await order(p1.id, (g, c) => proposePact(g, c, c2.id, 'nap'));
+    const again = (await buildDiplomacy(db(), c2, now())).clans.find((x) => x.clan.id === c1.id)!.pendingPacts[0];
+    await order(p2.id, (g, c) => respondProposal(g, c, again.proposalId, true));
+    expect(await count(`pacts WHERE status = 'active'`)).toBe(1);
+    await pass(72 * 60 + 61);
+    expect(await count(`pacts WHERE status = 'active'`)).toBe(0);
+    expect(await count(`pacts WHERE end_reason = 'expired'`)).toBe(1);
+  });
+
+  it('lets the leader set the clan on a doctrine, and holds it there', async () => {
+    const c1 = await clanOf(p1.id);
+    const plain = await loadMods(db(), c1.id);
+    await expectRefused(orderAs(naoe.id, (g, clan, m) => setDoctrine(g, clan, { ...m, nickname: 'Naoe' }, 'aggressive')), 'FORBIDDEN_ROLE');
+    await orderAs(p1.id, (g, clan, m) => setDoctrine(g, clan, { ...m, nickname: p1.nickname }, 'aggressive'));
+    const tiger = await loadMods(db(), c1.id);
+    expect(tiger.attack).toBeCloseTo(plain.attack + 0.06);
+    expect(tiger.marchSpeed).toBeCloseTo(plain.marchSpeed + 0.1);
+    expect(tiger.defense).toBeCloseTo(plain.defense - 0.05);
+    await expectRefused(orderAs(p1.id, (g, clan, m) => setDoctrine(g, clan, { ...m, nickname: p1.nickname }, 'defensive')), 'DOCTRINE_COOLDOWN');
+    const profile = await buildMap(db(), await viewerOf(p2), now());
+    expect(profile.clans.find((c) => c.id === c1.id)!.doctrine).toBe('aggressive');
+    // The virtual clock must still be behind the wall clock for the HTTP tests that follow.
+    expect(clock).toBeLessThan(Date.now());
+  });
+});
+
 describe('HTTP API', () => {
   let cookie = '';
   const call = async (handler: (req: Request, args: any) => Promise<Response>, path: string, init: RequestInit & { params?: Record<string, string> } = {}) => {
@@ -686,7 +972,9 @@ describe('HTTP API', () => {
     }
     const { GET: leaderboard } = await import('@/app/api/leaderboard/route');
     const board = (await call(leaderboard, '/api/leaderboard')).body;
-    expect(board.entries).toHaveLength(5); // two NPC daimyo and three players
+    // NPC houses and the clans of players that still hold land (the world has moved on by now).
+    expect(board.entries.length).toBeGreaterThanOrEqual(3);
+    expect(board.players.length).toBeGreaterThanOrEqual(3);
     expect(board.entries.filter((e: any) => e.isViewer)).toHaveLength(1);
     expect(board.entries[0].score).toBeGreaterThanOrEqual(board.entries[1].score);
 
