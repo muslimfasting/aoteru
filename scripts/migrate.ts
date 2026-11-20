@@ -11,6 +11,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
+import { pgConfig } from '../src/server/pg-config';
 import { loadEnv } from './env';
 
 loadEnv();
@@ -28,7 +29,7 @@ async function main(): Promise<void> {
     }
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local first.');
   }
-  const client = new pg.Client({ connectionString: url });
+  const client = new pg.Client(pgConfig(url));
   await client.connect();
   try {
     if (args.has('--reset')) {

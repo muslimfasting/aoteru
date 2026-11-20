@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { pgConfig } from './pg-config';
 
 // Resource balances are bigint and loyalty is numeric; both fit safely in a JS number here.
 pg.types.setTypeParser(20, (v) => Number(v));
@@ -25,7 +26,7 @@ export function pool(): pg.Pool {
       throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local and point it at PostgreSQL.');
     }
     globalThis.__aoteruPool = new pg.Pool({
-      connectionString,
+      ...pgConfig(connectionString),
       max: Number(process.env.PG_POOL_MAX ?? 5),
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 10_000,
