@@ -205,7 +205,7 @@ async function rebel(g: G, province: ProvinceRow, clan: ClanRow, garrison: ArmyR
   await chronicle(g, {
     type: 'rebellion',
     title: `${province.name} rises in rebellion`,
-    description: `On ${dayLabel(g.tick)}, the people of ${province.name} drove out the officers of the ${clan.name} clan and closed the roads. The province answers to no lord.`,
+    description: `On ${dayLabel(g.tick)}, the people of ${province.name} drove out the officers of the nation of ${clan.name} and closed the roads. The province answers to no government.`,
     provinceId: province.id,
     clanId: clan.id,
   });
@@ -273,7 +273,7 @@ async function rollWorldEvent(g: G): Promise<number> {
     await chronicle(g, {
       type,
       title: `Merchants arrive in ${province.name}`,
-      description: `On ${dayLabel(g.tick)}, a caravan from the western provinces paid ${gold} gold in tolls and gifts to the lord of ${province.name}.`,
+      description: `On ${dayLabel(g.tick)}, a caravan from the western provinces paid ${gold} gold in tolls and duties to the administration of ${province.name}.`,
       provinceId: province.id,
       clanId: owner.id,
     });

@@ -246,7 +246,7 @@ export function playerRoute<S extends z.ZodType | undefined = undefined>(
 export function forbiddenFor(role: MemberRow['role'], permission: ClanPermission): GameError {
   return new GameError(
     'FORBIDDEN_ROLE',
-    `Your role (${ROLE_DEFS[role].name}) may not do this. It needs the "${PERMISSION_DEFS[permission].name}" permission; ask your clan leader.`,
+    `Your role (${ROLE_DEFS[role].name}) may not do this. It needs the "${PERMISSION_DEFS[permission].name}" permission; ask your Chancellor.`,
     403,
   );
 }
@@ -259,8 +259,8 @@ export function clanRoute<S extends z.ZodType | undefined = undefined>(
   return playerRoute(opts, async (ctx) => {
     const clan = ctx.session.clan;
     const member = ctx.session.member;
-    if (!clan || !member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
-    if (clan.status !== 'active') throw new GameError('CLAN_FALLEN', 'Your clan has fallen. It must found a new seat to continue.', 409);
+    if (!clan || !member) throw new GameError('NO_CLAN', 'Join or found a nation first', 409);
+    if (clan.status !== 'active') throw new GameError('CLAN_FALLEN', 'Your nation has fallen. It must found a new seat to continue.', 409);
     if (opts.permission && !member.permissions.includes(opts.permission)) throw forbiddenFor(member.role, opts.permission);
     return handler({ ...ctx, clan, member });
   });
@@ -300,11 +300,11 @@ export async function act<T>(
     const member = await one<MemberRow>(tx, 'SELECT player_id, clan_id, role, joined_at, contribution FROM clan_members WHERE player_id = $1 FOR UPDATE', [
       ctx.session.player.id,
     ]);
-    if (!member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+    if (!member) throw new GameError('NO_CLAN', 'Join or found a nation first', 409);
     const clan = await one<ClanRow>(tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [member.clan_id]);
-    if (!clan) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+    if (!clan) throw new GameError('NO_CLAN', 'Join or found a nation first', 409);
     if (clan.status !== 'active' && !opts.allowFallen) {
-      throw new GameError('CLAN_FALLEN', 'Your clan has fallen. It must found a new seat to continue.', 409);
+      throw new GameError('CLAN_FALLEN', 'Your nation has fallen. It must found a new seat to continue.', 409);
     }
     if (opts.permission && !(await hasPermission(tx, member, opts.permission))) throw forbiddenFor(member.role, opts.permission);
     return fn(g, clan, member);

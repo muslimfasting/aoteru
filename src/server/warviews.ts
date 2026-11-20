@@ -71,7 +71,7 @@ export async function tacticOptions(
 }
 
 export async function buildWarCouncil(db: Db, viewer: Viewer, now: Date): Promise<WarCouncilResponse> {
-  if (!viewer.clan || !viewer.member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+  if (!viewer.clan || !viewer.member) throw new GameError('NO_CLAN', 'Join or found a nation first', 409);
   const clan = viewer.clan;
   const me = viewer.player.id;
   const view = await loadWorldView(db, now);

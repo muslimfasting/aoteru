@@ -104,7 +104,7 @@ export async function createWorld(tx: Db, now: Date): Promise<WorldStateRow> {
       type: 'founding',
       title: 'The home provinces stand divided',
       description:
-        'The capital is held by no great house. In Omi the Rokkaku tend their rice and their walls; on the inner sea the Miyoshi count their ships and look east. Between them lie provinces that answer to no lord — yet.',
+        'No government holds the old capital. In Omi the Rokkaku administration tends its rice and its walls; on the inner sea the Miyoshi count their ships and look east. Between them lie provinces that answer to no lord — yet.',
     },
   );
   return (await loadWorldState(tx, true))!;

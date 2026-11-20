@@ -1,5 +1,8 @@
 /**
- * Clan organisation: roles, permissions, council seats and the personal economy.
+ * How a nation is governed: offices, permissions, cabinet seats and the personal economy.
+ *
+ * The factions of the game are nations with governments, and players are their
+ * officials. (The code keeps the older word "clan" for a faction throughout.)
  * Shared by server and client; pure data and pure functions.
  */
 import type { ResourceBag, ResourceKey } from './config';
@@ -24,20 +27,21 @@ export interface RoleDef {
 }
 
 export const ROLE_DEFS: Record<ClanRole, RoleDef> = {
-  leader: { id: 'leader', name: 'Shogun', rank: 100, summary: 'Leads the clan. May do everything.', seat: 'leadership' },
-  officer: { id: 'officer', name: 'Daimyo', rank: 80, summary: 'Runs members, armies and diplomacy for the leader.', seat: 'culture' },
+  leader: { id: 'leader', name: 'Chancellor', rank: 100, summary: 'Heads the government. May do everything.', seat: 'leadership' },
+  officer: { id: 'officer', name: 'Minister of State', rank: 80, summary: 'Runs appointments, the army and foreign affairs for the Chancellor.', seat: 'culture' },
   general: { id: 'general', name: 'General', rank: 60, summary: 'Raises troops and commands the armies.', seat: 'military' },
-  strategist: { id: 'strategist', name: 'Strategist', rank: 60, summary: 'Draws up the war plans.', seat: null },
-  intelligence: { id: 'intelligence', name: 'Intelligence Officer', rank: 60, summary: 'Runs scouts and spies.', seat: 'intelligence' },
-  treasurer: { id: 'treasurer', name: 'Treasurer', rank: 60, summary: 'Keeps the treasury and pays for the works.', seat: 'economy' },
-  samurai: { id: 'samurai', name: 'Samurai', rank: 20, summary: 'A sworn member of the clan.', seat: null },
-  recruit: { id: 'recruit', name: 'Recruit', rank: 10, summary: 'Newly joined, still proving themselves.', seat: null },
+  strategist: { id: 'strategist', name: 'Chief of Staff', rank: 60, summary: 'Draws up the war plans.', seat: null },
+  intelligence: { id: 'intelligence', name: 'Director of Intelligence', rank: 60, summary: 'Runs scouts and spies.', seat: 'intelligence' },
+  treasurer: { id: 'treasurer', name: 'Minister of Finance', rank: 60, summary: 'Keeps the treasury and pays for the public works.', seat: 'economy' },
+  samurai: { id: 'samurai', name: 'Official', rank: 20, summary: 'A sworn official of the nation.', seat: null },
+  recruit: { id: 'recruit', name: 'Clerk', rank: 10, summary: 'Newly appointed, still proving themselves.', seat: null },
 };
 
 /**
- * Council seats. Each pillar of the clan is carried by the member holding the
- * matching seat — or by the leader, whichever is stronger in it. A clan of
- * specialists is therefore stronger than one person trying to master everything.
+ * The cabinet. Each pillar of the nation is carried by the official holding the
+ * matching seat — or by the Chancellor, whichever is stronger in it. A
+ * government of specialists is therefore stronger than one person trying to
+ * master everything.
  */
 export const SEAT_OF_PILLAR: Record<PillarId, ClanRole> = {
   leadership: 'leader',
@@ -55,15 +59,15 @@ export const CLAN_PERMISSIONS = ['manage_members', 'manage_clan', 'build', 'recr
 export type ClanPermission = (typeof CLAN_PERMISSIONS)[number];
 
 export const PERMISSION_DEFS: Record<ClanPermission, { name: string; summary: string }> = {
-  manage_members: { name: 'Members', summary: 'Invite players, answer applications, assign roles and remove members of lower rank.' },
-  manage_clan: { name: 'Clan profile', summary: 'Edit the description and recruitment settings, post announcements.' },
+  manage_members: { name: 'Appointments', summary: 'Invite players, answer applications, appoint officials and dismiss those of lower rank.' },
+  manage_clan: { name: 'Nation profile', summary: 'Edit the description and recruitment settings, post announcements.' },
   build: { name: 'Construction', summary: 'Upgrade buildings and hold festivals with treasury resources.' },
   recruit: { name: 'Recruitment', summary: 'Recruit troops with treasury resources.' },
   command: { name: 'Command', summary: 'Move armies and launch attacks.' },
-  war_plans: { name: 'War council', summary: 'Create war plans, choose strategies and assign members.' },
+  war_plans: { name: 'War council', summary: 'Create war plans, choose strategies and assign officials.' },
   diplomacy: { name: 'Diplomacy', summary: 'Declare war, and propose or answer treaties.' },
   espionage: { name: 'Intelligence', summary: 'Send scouts and run intelligence operations.' },
-  treasury: { name: 'Treasury', summary: 'Pay out treasury resources to members.' },
+  treasury: { name: 'Treasury', summary: 'Pay out treasury resources to officials.' },
 };
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<ClanRole, readonly ClanPermission[]> = {
@@ -93,7 +97,7 @@ export type RecruitmentMode = (typeof RECRUITMENT_MODES)[number];
 
 export const RECRUITMENT_DEFS: Record<RecruitmentMode, { name: string; summary: string }> = {
   open: { name: 'Open', summary: 'Anyone may join at once.' },
-  application: { name: 'Application', summary: 'Players apply; the clan decides.' },
+  application: { name: 'Application', summary: 'Players apply; the nation decides.' },
   invite: { name: 'Invitation only', summary: 'Only invited players may join.' },
   closed: { name: 'Closed', summary: 'Not taking new members.' },
 };
@@ -248,8 +252,8 @@ export const WAR_DUTIES = ['commander', 'scout', 'defender', 'logistics', 'spy',
 export type WarDuty = (typeof WAR_DUTIES)[number];
 
 export const DUTY_DEFS: Record<WarDuty, { name: string; summary: string; effect: string }> = {
-  commander: { name: 'Commander', summary: 'Leads the attack.', effect: 'The army fights with this member\'s own Military pillar.' },
-  strategist: { name: 'Strategist', summary: 'Shapes the plan.', effect: 'The tactic comes off more often: +1% per Intelligence level of this member (up to +6%).' },
+  commander: { name: 'Commander', summary: 'Leads the attack.', effect: 'The army fights with this official\'s own Military pillar.' },
+  strategist: { name: 'Strategist', summary: 'Shapes the plan.', effect: 'The tactic comes off more often: +1% per Intelligence level of this official (up to +6%).' },
   scout: { name: 'Scout', summary: 'Watches the enemy.', effect: 'With a fresh scouting report on the target, the tactic comes off 8% more often.' },
   logistics: { name: 'Logistics Officer', summary: 'Manages the supplies.', effect: 'The march consumes 20% less food.' },
   reinforcement: { name: 'Reinforcement', summary: 'Stands ready with reserves.', effect: 'The army starts with +4 morale.' },
@@ -261,10 +265,10 @@ export const PACT_TYPES = ['nap', 'alliance'] as const;
 export type PactType = (typeof PACT_TYPES)[number];
 
 export const PACT_DEFS: Record<PactType, { name: string; summary: string; hours: number | null }> = {
-  nap: { name: 'Non-aggression Pact', summary: 'Neither clan may declare war on or attack the other for three days.', hours: 72 },
+  nap: { name: 'Non-aggression Pact', summary: 'Neither nation may declare war on or attack the other for three days.', hours: 72 },
   alliance: {
     name: 'Alliance',
-    summary: 'No war between the two clans; each sees the other\'s garrisons, may march through the other\'s land and is called when the other is attacked.',
+    summary: 'No war between the two nations; each sees the other\'s garrisons, may march through the other\'s land and is called when the other is attacked.',
     hours: null,
   },
 };

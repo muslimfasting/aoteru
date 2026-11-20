@@ -30,7 +30,7 @@ export async function postChat(g: G, playerId: string, member: Membership | null
   const channel = input.channel ?? 'world';
 
   if (channel === 'clan') {
-    if (!member) throw conflict('NO_CLAN', 'Join a clan to use the clan channel');
+    if (!member) throw conflict('NO_CLAN', 'Join a nation to use the nation channel');
     const row = await one<{ id: number }>(
       g.tx,
       `INSERT INTO chat_messages (channel, clan_id, player_id, body, created_at) VALUES ('clan', $1, $2, $3, $4) RETURNING id`,

@@ -185,7 +185,7 @@ export async function planMarch(
       const wars = await loadActiveWars(g.tx);
       if (!atWar(wars, clan.id, target.owner_clan_id)) {
         const owner = await one<{ name: string }>(g.tx, 'SELECT name FROM clans WHERE id = $1', [target.owner_clan_id]);
-        return fail(`You are not at war with the ${owner?.name ?? 'ruling'} clan. Declare war first.`);
+        return fail(`You are not at war with the nation of ${owner?.name ?? 'ruling'}. Declare war first.`);
       }
     }
   }
@@ -350,7 +350,7 @@ export async function arriveArmy(g: G, armyId: string): Promise<void> {
     await notifyClan(g, army.clan_id, {
       type: 'army',
       title: `Your army turns back from ${target.name}`,
-      body: `You are no longer at war with the lord of ${target.name}; the attack was called off.`,
+      body: `You are no longer at war with the holders of ${target.name}; the attack was called off.`,
       link: '/game/military',
     });
     return;

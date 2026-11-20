@@ -43,7 +43,7 @@ async function membershipOf(tx: Db, playerId: string): Promise<MemberRow | null>
 
 async function lockClan(tx: Db, clanId: string): Promise<ClanRow> {
   const clan = await one<ClanRow>(tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [clanId]);
-  if (!clan || clan.status === 'disbanded') throw notFound('Clan');
+  if (!clan || clan.status === 'disbanded') throw notFound('Nation');
   return clan;
 }
 
@@ -62,14 +62,14 @@ export async function seedPermissions(tx: Db, clanId: string): Promise<void> {
 }
 
 function assertJoinable(clan: ClanRow, count: number): void {
-  if (clan.is_npc) throw conflict('NOT_JOINABLE', 'That clan does not take in outsiders');
-  if (clan.status !== 'active') throw conflict('NOT_JOINABLE', 'That clan has fallen');
+  if (clan.is_npc) throw conflict('NOT_JOINABLE', 'That nation does not take in outsiders');
+  if (clan.status !== 'active') throw conflict('NOT_JOINABLE', 'That nation has fallen');
   if (count >= CLAN_RULES.maxMembers) throw conflict('CLAN_FULL', `${clan.name} is full (${CLAN_RULES.maxMembers} members)`);
 }
 
 async function assertFree(tx: Db, playerId: string): Promise<void> {
   const current = await membershipOf(tx, playerId);
-  if (current) throw conflict('ALREADY_IN_CLAN', 'You already belong to a clan. Leave it first.');
+  if (current) throw conflict('ALREADY_IN_CLAN', 'You already belong to a nation. Leave it first.');
 }
 
 /** Admit a player. Their other pending applications and invitations are closed. */
@@ -77,11 +77,11 @@ async function addMember(g: G, clan: ClanRow, player: PlayerRef, how: string): P
   await g.tx.query(`INSERT INTO clan_members (player_id, clan_id, role, joined_at) VALUES ($1, $2, 'recruit', $3)`, [player.id, clan.id, g.now]);
   await g.tx.query(`UPDATE clan_applications SET status = 'withdrawn', decided_at = $2 WHERE player_id = $1 AND status = 'pending'`, [player.id, g.now]);
   await g.tx.query(`UPDATE clan_invitations SET status = 'declined', decided_at = $2 WHERE player_id = $1 AND status = 'pending'`, [player.id, g.now]);
-  await clanActivity(g, clan.id, 'joined', `${player.nickname} joined the clan${how}.`);
+  await clanActivity(g, clan.id, 'joined', `${player.nickname} joined the nation${how}.`);
   await notifyClan(
     g,
     clan.id,
-    { type: 'clan', title: `${player.nickname} has joined ${clan.name}`, body: `A new recruit swears to the banner${how}.`, link: '/game/clan' },
+    { type: 'clan', title: `${player.nickname} has joined ${clan.name}`, body: `A new ${ROLE_DEFS.recruit.name.toLowerCase()} takes the oath of office${how}.`, link: '/game/clan' },
     player.id,
   );
   await emit(g, playerRoom(player.id), 'clan:updated', { clanId: clan.id, type: 'joined' });
@@ -143,7 +143,7 @@ export async function respondApplication(g: G, clan: ClanRow, actor: PlayerRef, 
   if (accept) {
     if (await membershipOf(g.tx, app.player_id)) {
       await g.tx.query(`UPDATE clan_applications SET status = 'withdrawn', decided_at = $2 WHERE id = $1`, [app.id, g.now]);
-      throw conflict('ALREADY_IN_CLAN', `${app.nickname} has joined another clan in the meantime`);
+      throw conflict('ALREADY_IN_CLAN', `${app.nickname} has joined another nation in the meantime`);
     }
     assertJoinable(clan, await memberCount(g.tx, clan.id));
     await g.tx.query(`UPDATE clan_applications SET status = 'accepted', decided_by = $2, decided_at = $3 WHERE id = $1`, [app.id, actor.id, g.now]);
@@ -151,7 +151,7 @@ export async function respondApplication(g: G, clan: ClanRow, actor: PlayerRef, 
     await notifyPlayer(g, app.player_id, {
       type: 'clan',
       title: `Welcome to ${clan.name}`,
-      body: `${actor.nickname} accepted your application. You join as a Recruit.`,
+      body: `${actor.nickname} accepted your application. You join as a ${ROLE_DEFS.recruit.name}.`,
       link: '/game/clan',
     });
   } else {
@@ -159,7 +159,7 @@ export async function respondApplication(g: G, clan: ClanRow, actor: PlayerRef, 
     await notifyPlayer(g, app.player_id, {
       type: 'clan',
       title: `${clan.name} declined your application`,
-      body: 'You are free to apply to another clan, or to found your own.',
+      body: 'You are free to apply to another nation, or to found your own.',
       link: '/game/clans',
     });
     await emit(g, playerRoom(app.player_id), 'clan:updated', { clanId: clan.id, type: 'rejected' });
@@ -183,7 +183,7 @@ export async function invitePlayer(g: G, clan: ClanRow, actor: PlayerRef, nickna
   await notifyPlayer(g, target.id, {
     type: 'clan',
     title: `${clan.name} invites you`,
-    body: `${actor.nickname} invites you to join the ${clan.name} clan.`,
+    body: `${actor.nickname} invites you to join the nation of ${clan.name}.`,
     link: '/game/clans',
   });
   await emit(g, playerRoom(target.id), 'clan:updated', { clanId: clan.id, type: 'invited' });
@@ -255,8 +255,8 @@ async function disbandClan(g: G, clan: ClanRow, leaderName: string): Promise<voi
   await g.tx.query(`UPDATE clan_invitations SET status = 'revoked', decided_at = $2 WHERE clan_id = $1 AND status = 'pending'`, [clan.id, g.now]);
   await chronicle(g, {
     type: 'fallen',
-    title: `The ${clan.name} clan is dissolved`,
-    description: `On ${dayLabel(g.tick)}, ${leaderName} lowered the banner of the ${clan.name} clan. Its lands returned to the local warriors.`,
+    title: `The nation of ${clan.name} is dissolved`,
+    description: `On ${dayLabel(g.tick)}, ${leaderName} lowered the banner of the nation of ${clan.name}. Its lands returned to the local warriors.`,
     clanId: clan.id,
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { clanId: clan.id });
@@ -266,11 +266,11 @@ async function disbandClan(g: G, clan: ClanRow, leaderName: string): Promise<voi
 /** Leave the clan. A leader must hand over first, unless they are the last member — then the clan is dissolved. */
 export async function leaveClan(g: G, player: PlayerRef): Promise<{ disbanded: boolean }> {
   const member = await membershipOf(g.tx, player.id);
-  if (!member) throw conflict('NO_CLAN', 'You do not belong to a clan');
+  if (!member) throw conflict('NO_CLAN', 'You do not belong to a nation');
   const clan = await lockClan(g.tx, member.clan_id);
   const count = await memberCount(g.tx, clan.id);
   if (member.role === 'leader') {
-    if (count > 1) throw conflict('LEADER_MUST_HAND_OVER', 'Hand the leadership to another member before leaving');
+    if (count > 1) throw conflict('LEADER_MUST_HAND_OVER', 'Hand the government over to another official before leaving');
     await disbandClan(g, clan, player.nickname);
     await audit(g, 'clan.disband', { type: 'clan', id: clan.id }, clan.id, { player: player.nickname });
     await emit(g, playerRoom(player.id), 'clan:updated', { clanId: clan.id, type: 'left' });
@@ -278,11 +278,11 @@ export async function leaveClan(g: G, player: PlayerRef): Promise<{ disbanded: b
   }
   await g.tx.query('DELETE FROM clan_members WHERE player_id = $1', [player.id]);
   await g.tx.query('UPDATE armies SET commander_player_id = NULL WHERE commander_player_id = $1', [player.id]);
-  await clanActivity(g, clan.id, 'left', `${player.nickname} left the clan.`);
+  await clanActivity(g, clan.id, 'left', `${player.nickname} left the nation.`);
   await notifyClanRoles(g, clan.id, 'manage_members', {
     type: 'clan',
     title: `${player.nickname} has left ${clan.name}`,
-    body: `The ${ROLE_DEFS[member.role].name} no longer serves the clan.`,
+    body: `The ${ROLE_DEFS[member.role].name} no longer serves the nation.`,
     link: '/game/clan',
   });
   await emit(g, playerRoom(player.id), 'clan:updated', { clanId: clan.id, type: 'left' });
@@ -304,16 +304,16 @@ async function targetMember(tx: Db, clan: ClanRow, playerId: string): Promise<Me
 }
 
 export async function kickMember(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, targetId: string): Promise<void> {
-  if (targetId === actor.player_id) throw invalid('To leave the clan, use "Leave clan"');
+  if (targetId === actor.player_id) throw invalid('To leave the nation, use "Leave nation"');
   const target = await targetMember(g.tx, clan, targetId);
   if (!outranks(actor.role, target.role)) throw new GameError('FORBIDDEN_ROLE', `You cannot remove a ${ROLE_DEFS[target.role].name}`, 403);
   await g.tx.query('DELETE FROM clan_members WHERE player_id = $1', [target.player_id]);
   await g.tx.query('UPDATE armies SET commander_player_id = NULL WHERE commander_player_id = $1', [target.player_id]);
-  await clanActivity(g, clan.id, 'removed', `${actor.nickname} removed ${target.nickname} from the clan.`);
+  await clanActivity(g, clan.id, 'removed', `${actor.nickname} removed ${target.nickname} from the nation.`);
   await notifyPlayer(g, target.player_id, {
     type: 'clan',
     title: `You were removed from ${clan.name}`,
-    body: 'You keep your purse and everything you have learned. Join another clan or found your own.',
+    body: 'You keep your purse and everything you have learned. Join another nation or found your own.',
     link: '/game/clans',
   });
   await emit(g, playerRoom(target.player_id), 'clan:updated', { clanId: clan.id, type: 'left' });
@@ -323,7 +323,7 @@ export async function kickMember(g: G, clan: ClanRow, actor: MemberRow & { nickn
 
 export async function setRole(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, targetId: string, role: ClanRole): Promise<void> {
   if (!(CLAN_ROLES as readonly string[]).includes(role)) throw invalid('Unknown role');
-  if (role === 'leader') throw invalid('To hand over the clan, use "Hand over leadership"');
+  if (role === 'leader') throw invalid('To hand over the nation, use "Hand over leadership"');
   if (targetId === actor.player_id) throw invalid('You cannot change your own role');
   const target = await targetMember(g.tx, clan, targetId);
   if (!outranks(actor.role, target.role)) throw new GameError('FORBIDDEN_ROLE', `You cannot change the role of a ${ROLE_DEFS[target.role].name}`, 403);
@@ -342,17 +342,17 @@ export async function setRole(g: G, clan: ClanRow, actor: MemberRow & { nickname
 }
 
 export async function transferLeadership(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, targetId: string): Promise<void> {
-  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the leader can hand over the clan', 403);
-  if (targetId === actor.player_id) throw invalid('You already lead the clan');
+  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the Chancellor can hand over the government', 403);
+  if (targetId === actor.player_id) throw invalid('You already lead the nation');
   const target = await targetMember(g.tx, clan, targetId);
   await g.tx.query(`UPDATE clan_members SET role = 'officer' WHERE player_id = $1`, [actor.player_id]);
   await g.tx.query(`UPDATE clan_members SET role = 'leader' WHERE player_id = $1`, [target.player_id]);
   await g.tx.query('UPDATE clans SET player_id = $2, daimyo_name = $3, portrait = $4 WHERE id = $1', [clan.id, target.player_id, target.nickname, target.portrait]);
-  await clanActivity(g, clan.id, 'leadership', `${actor.nickname} handed the leadership to ${target.nickname}.`);
+  await clanActivity(g, clan.id, 'leadership', `${actor.nickname} handed the government over to ${target.nickname}.`);
   await notifyClan(g, clan.id, {
     type: 'clan',
-    title: `${target.nickname} now leads ${clan.name}`,
-    body: `${actor.nickname} has handed over the clan and serves on as Daimyo.`,
+    title: `${target.nickname} is now ${ROLE_DEFS.leader.name} of ${clan.name}`,
+    body: `${actor.nickname} has handed over the government and serves on as ${ROLE_DEFS.officer.name}.`,
     link: '/game/clan',
   });
   await emit(g, WORLD_ROOM, 'clan:directory', { clanId: clan.id });
@@ -379,7 +379,7 @@ export async function updateSettings(g: G, clan: ClanRow, actor: PlayerRef, inpu
 
 /** Replace what one role may do. Only the leader decides this. */
 export async function setPermissions(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, role: ClanRole, permissions: string[]): Promise<void> {
-  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the leader can change what a role may do', 403);
+  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the Chancellor can change what an office may do', 403);
   if (!(CONFIGURABLE_ROLES as readonly string[]).includes(role)) throw invalid('That role cannot be configured');
   const wanted = [...new Set(permissions)];
   for (const p of wanted) if (!(CLAN_PERMISSIONS as readonly string[]).includes(p)) throw invalid(`Unknown permission "${p}"`);
@@ -407,17 +407,17 @@ export async function setAnnouncement(g: G, clan: ClanRow, actor: PlayerRef, bod
 
 /** Choose the clan's doctrine (§10). Only the leader decides, and a doctrine must be kept for a while. */
 export async function setDoctrine(g: G, clan: ClanRow, actor: MemberRow & { nickname: string }, doctrine: string): Promise<void> {
-  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the leader chooses the clan doctrine', 403);
+  if (actor.role !== 'leader') throw new GameError('FORBIDDEN_ROLE', 'Only the Chancellor chooses the national doctrine', 403);
   if (!(DOCTRINES as readonly string[]).includes(doctrine)) throw invalid('Unknown doctrine');
-  if (clan.doctrine === doctrine) throw conflict('DOCTRINE_UNCHANGED', 'The clan already follows that doctrine');
+  if (clan.doctrine === doctrine) throw conflict('DOCTRINE_UNCHANGED', 'The nation already follows that doctrine');
   if (clan.doctrine && clan.doctrine_set_at) {
     const free = addMs(new Date(clan.doctrine_set_at), gameMs(g, DOCTRINE_COOLDOWN_HOURS * 60));
-    if (free.getTime() > g.now.getTime()) throw conflict('DOCTRINE_COOLDOWN', 'A doctrine must be followed for three days before the clan can turn to another');
+    if (free.getTime() > g.now.getTime()) throw conflict('DOCTRINE_COOLDOWN', 'A doctrine must be followed for three days before the nation can turn to another');
   }
   await g.tx.query('UPDATE clans SET doctrine = $2, doctrine_set_at = $3 WHERE id = $1', [clan.id, doctrine, g.now]);
   const def = DOCTRINE_DEFS[doctrine as keyof typeof DOCTRINE_DEFS];
-  await clanActivity(g, clan.id, 'doctrine', `${actor.nickname} set the clan on the ${def.name}.`);
-  await notifyClan(g, clan.id, { type: 'clan', title: `The clan follows the ${def.name}`, body: `${def.motto} ${def.summary}`, link: '/game/clan' }, actor.player_id);
+  await clanActivity(g, clan.id, 'doctrine', `${actor.nickname} set the nation on the ${def.name}.`);
+  await notifyClan(g, clan.id, { type: 'clan', title: `The nation follows the ${def.name}`, body: `${def.motto} ${def.summary}`, link: '/game/clan' }, actor.player_id);
   await emit(g, WORLD_ROOM, 'clan:directory', { clanId: clan.id });
   await audit(g, 'clan.doctrine', { type: 'clan', id: clan.id }, clan.id, { doctrine });
 }

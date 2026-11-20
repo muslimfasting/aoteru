@@ -185,7 +185,7 @@ export const PROVINCES: ProvinceDef[] = [
     polygon: [V.Y2, V.Y1, V.M1, V.M2, V.M3, V.K2],
     label: [588, 600],
     neighbors: ['yamashiro', 'kawachi', 'iga', 'ise', 'kii'],
-    lore: 'The old heartland, ruled as much by its great temples as by any lord.',
+    lore: 'The old heartland, ruled as much by its great temples as by any government.',
   },
   {
     code: 'iga',
@@ -363,6 +363,6 @@ export const NPC_CLANS: NpcClanDef[] = [
     capital: 'settsu',
     pillarLevel: 3,
     garrison: { ashigaru: 200, yari: 60, archer: 50, samurai: 30 },
-    description: 'Ambitious lords of the inner sea, always reaching for the capital.',
+    description: 'An ambitious government of the inner sea, always reaching for the old capital.',
   },
 ];

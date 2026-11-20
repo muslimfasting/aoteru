@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 /** POST /api/clans/:id/apply — ask to join a clan that takes applications. */
 export const POST = playerRoute({ body: applyBody, mutation: true }, async (ctx) => {
-  const clanId = assertUuid(ctx.params.id, 'clan id');
+  const clanId = assertUuid(ctx.params.id, 'nation id');
   await actAsPlayer(ctx, (g) => applyToClan(g, ctx.session.player, clanId, ctx.body.message ?? ''));
   return buildClanDirectory(pool(), await freshViewer(ctx.req), ctx.now, { search: '', language: '', recruitment: '', sort: 'rank' });
 });

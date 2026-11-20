@@ -44,14 +44,14 @@ export async function createClan(g: G, player: { id: string; nickname: string },
   ]);
   if (member) {
     const current = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [member.clan_id]);
-    if (current?.status === 'active') throw conflict('ALREADY_IN_CLAN', 'You already belong to a clan. Leave it before founding your own.');
+    if (current?.status === 'active') throw conflict('ALREADY_IN_CLAN', 'You already belong to a nation. Leave it before founding your own.');
     if (member.role !== 'leader') {
-      throw conflict('ALREADY_IN_CLAN', 'Your clan has fallen. Only its leader can found a new seat. Leave the clan to found your own.');
+      throw conflict('ALREADY_IN_CLAN', 'Your nation has fallen. Only its leader can found a new seat. Leave the nation to found your own.');
     }
     existing = current;
   }
 
-  const clanName = cleanName(input.clanName, NAME_RULES.clanName, 'Clan name');
+  const clanName = cleanName(input.clanName, NAME_RULES.clanName, 'Nation name');
   const daimyoName = cleanName(input.daimyoName, NAME_RULES.daimyoName, 'Leader name');
   if (!PORTRAITS.some((p) => p.id === input.portrait)) throw invalid('Choose a portrait');
   if (!BANNER_COLORS.some((c) => c.id === input.bannerColor)) throw invalid('Choose a banner colour');
@@ -59,7 +59,7 @@ export async function createClan(g: G, player: { id: string; nickname: string },
 
   const rawTag = (input.tag ?? existing?.tag ?? (await freeTag(g, clanName))).trim().toUpperCase();
   if (rawTag.length < CLAN_RULES.tag.min || rawTag.length > CLAN_RULES.tag.max || !CLAN_RULES.tag.pattern.test(rawTag)) {
-    throw invalid(`Clan tag must be ${CLAN_RULES.tag.min}-${CLAN_RULES.tag.max} letters or numbers`);
+    throw invalid(`Nation tag must be ${CLAN_RULES.tag.min}-${CLAN_RULES.tag.max} letters or numbers`);
   }
   const description = (input.description ?? existing?.description ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CLAN_RULES.descriptionMax);
   const recruitment = input.recruitment ?? existing?.recruitment ?? 'application';
@@ -81,14 +81,14 @@ export async function createClan(g: G, player: { id: string; nickname: string },
     clanName,
     existing?.id ?? null,
   ]);
-  if (nameTaken) throw conflict('CLAN_NAME_TAKEN', 'Another clan already bears that name');
+  if (nameTaken) throw conflict('CLAN_NAME_TAKEN', 'Another nation already bears that name');
   const tagTaken = await one(g.tx, `SELECT 1 FROM clans WHERE upper(tag) = $1 AND status <> 'disbanded' AND id IS DISTINCT FROM $2`, [rawTag, existing?.id ?? null]);
-  if (tagTaken) throw conflict('CLAN_TAG_TAKEN', 'Another clan already uses that tag');
+  if (tagTaken) throw conflict('CLAN_TAG_TAKEN', 'Another nation already uses that tag');
   const colorTaken = await one(g.tx, `SELECT 1 FROM clans WHERE banner_color = $1 AND status = 'active' AND id IS DISTINCT FROM $2`, [
     input.bannerColor,
     existing?.id ?? null,
   ]);
-  if (colorTaken) throw conflict('BANNER_TAKEN', 'Another clan already flies that colour');
+  if (colorTaken) throw conflict('BANNER_TAKEN', 'Another nation already flies that colour');
 
   const protectedUntil = addMs(g.now, gameMs(g, WORLD.protectionHours * 60));
   let clanId: string;
@@ -163,7 +163,7 @@ export async function createClan(g: G, player: { id: string; nickname: string },
 
   await chronicle(g, {
     type: 'founding',
-    title: existing ? `The ${clanName} clan rises again in ${province.name}` : `The ${clanName} clan is founded in ${province.name}`,
+    title: existing ? `The nation of ${clanName} rises again in ${province.name}` : `The nation of ${clanName} is founded in ${province.name}`,
     description: `On ${dayLabel(g.tick)}, ${daimyoName} raised a banner over ${province.name} and the local warriors swore to follow it.`,
     provinceId: province.id,
     clanId,

@@ -247,7 +247,7 @@ export function tacticBlockReason(
   const def = TACTIC_DEFS[tactic];
   if (!def) return 'Unknown tactic';
   if (def.requires && levels[def.requires.pillar] < def.requires.level) {
-    return `Needs ${def.requires.pillar[0].toUpperCase()}${def.requires.pillar.slice(1)} level ${def.requires.level} (the clan has ${levels[def.requires.pillar]})`;
+    return `Needs ${def.requires.pillar[0].toUpperCase()}${def.requires.pillar.slice(1)} level ${def.requires.level} (the nation has ${levels[def.requires.pillar]})`;
   }
   if (tactic === 'flanking') {
     if (cavalryShare(units) < FLANKING_CAVALRY_SHARE) return `At least ${Math.round(FLANKING_CAVALRY_SHARE * 100)}% of the host must be cavalry`;

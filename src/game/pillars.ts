@@ -1,5 +1,5 @@
 /**
- * The Five Pillars — the Daimyo's progression system (GDD §4).
+ * The Five Pillars — every official's own progression (GDD §4).
  *
  * Each pillar levels from 1 to 100 through play. Every level grants one skill
  * point for that pillar. Skills have ranks, prerequisites and, at pillar level
@@ -289,7 +289,7 @@ export const SKILLS: SkillDef[] = [
   },
   {
     code: 'cul_honor', pillar: 'culture', name: 'Honor', category: 'Honor',
-    description: 'A lord who keeps his word is followed without being asked twice.',
+    description: 'A government that keeps its word is followed without being asked twice.',
     maxRank: 5, perRank: { loyaltyPerDay: 0.5, festival: 0.1 }, effectText: '+0.5 loyalty per day and +10% festival effect per rank',
     requiresLevel: 2, requiresSkills: [],
   },

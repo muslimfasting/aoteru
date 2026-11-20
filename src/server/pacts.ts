@@ -22,11 +22,11 @@ async function totalPower(tx: Db, clanId: string): Promise<number> {
 /** Why `clan` may not offer this treaty to `target`, or null if it may. */
 export async function pactBlockReason(g: Pick<G, 'tx' | 'now'>, clan: ClanRow, target: ClanRow, type: PactType, pacts: PactRow[]): Promise<string | null> {
   if (clan.id === target.id) return 'You cannot make a treaty with yourself';
-  if (target.status !== 'active') return 'That clan has fallen';
+  if (target.status !== 'active') return 'That nation has fallen';
   if (atWar(await loadActiveWars(g.tx), clan.id, target.id)) return 'You are at war. Make peace first.';
   const existing = pactBetween(pacts, clan.id, target.id);
-  if (existing?.type === type) return `You already have ${type === 'alliance' ? 'an alliance' : 'a pact'} with that clan`;
-  if (existing?.type === 'alliance' && type === 'nap') return 'You are already allied with that clan';
+  if (existing?.type === type) return `You already have ${type === 'alliance' ? 'an alliance' : 'a pact'} with that nation`;
+  if (existing?.type === 'alliance' && type === 'nap') return 'You are already allied with that nation';
   return null;
 }
 
@@ -48,8 +48,8 @@ async function createPact(g: G, type: PactType, a: ClanRow, b: ClanRow): Promise
     title: type === 'alliance' ? `${a.name} and ${b.name} are allied` : `${a.name} and ${b.name} sign a non-aggression pact`,
     description:
       type === 'alliance'
-        ? `On ${dayLabel(g.tick)}, the ${a.name} and ${b.name} clans swore to stand together.`
-        : `On ${dayLabel(g.tick)}, the ${a.name} and ${b.name} clans agreed to keep the peace between them for three days.`,
+        ? `On ${dayLabel(g.tick)}, the ${a.name} and ${b.name} nations swore to stand together.`
+        : `On ${dayLabel(g.tick)}, the ${a.name} and ${b.name} nations agreed to keep the peace between them for three days.`,
     clanId: a.id,
   });
   await awardClanXp(g, a.id, 'culture', type === 'alliance' ? 60 : 30, 0, null);
@@ -66,7 +66,7 @@ async function createPact(g: G, type: PactType, a: ClanRow, b: ClanRow): Promise
 export async function proposePact(g: G, clan: ClanRow, targetClanId: string, type: PactType): Promise<void> {
   if (!PACT_DEFS[type]) throw invalid('Unknown treaty');
   const target = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1', [targetClanId]);
-  if (!target) throw notFound('Clan');
+  if (!target) throw notFound('Nation');
   const pacts = await loadActivePacts(g.tx);
   const blocked = await pactBlockReason(g, clan, target, type, pacts);
   if (blocked) throw conflict('PACT_BLOCKED', blocked);
@@ -107,7 +107,7 @@ export async function proposePact(g: G, clan: ClanRow, targetClanId: string, typ
       body: accepts
         ? `${target.daimyo_name} has put a seal to your proposal.`
         : type === 'alliance'
-          ? `${target.daimyo_name} will not bind an old house to a new banner.`
+          ? `${target.daimyo_name} will not bind an old government to a new flag.`
           : `${target.daimyo_name} sees no need to tie the hands of the stronger side.`,
       link: '/game/diplomacy',
     });
@@ -142,7 +142,7 @@ export async function respondProposal(g: G, clan: ClanRow, proposalId: string, a
     throw conflict('PROPOSAL_CLOSED', 'That proposal has expired');
   }
   const from = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1', [proposal.from_clan_id]);
-  if (!from) throw invalid('The proposing clan no longer exists');
+  if (!from) throw invalid('The proposing nation no longer exists');
   const type = proposal.type as PactType;
   if (accept) {
     const blocked = await pactBlockReason(g, from, clan, type, await loadActivePacts(g.tx));
@@ -177,13 +177,13 @@ export async function breakPact(g: G, clan: ClanRow, pactId: string): Promise<vo
   await chronicle(g, {
     type: 'pact_broken',
     title: `${clan.name} breaks its ${name} with ${other?.name ?? 'its partner'}`,
-    description: `On ${dayLabel(g.tick)}, the ${clan.name} clan tore up its ${name} with the ${other?.name ?? 'other'} clan. Its own people murmur at the broken word.`,
+    description: `On ${dayLabel(g.tick)}, the nation of ${clan.name} tore up its ${name} with the nation of ${other?.name ?? 'other'}. Its own people murmur at the broken word.`,
     clanId: clan.id,
   });
   await notifyClan(g, otherId, {
     type: 'war',
     title: `${clan.name} has broken the ${name}`,
-    body: `The ${clan.name} clan no longer holds to its word. Look to your borders.`,
+    body: `The nation of ${clan.name} no longer holds to its word. Look to your borders.`,
     link: '/game/diplomacy',
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { pactId: pact.id });

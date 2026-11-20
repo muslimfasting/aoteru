@@ -1092,7 +1092,7 @@ describe('HTTP API', () => {
     cookie = leader;
     await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'treasurer' });
     const appointed = (await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: hide.id, role: 'officer' })).body;
-    expect(appointed.members.find((m: any) => m.nickname === 'Hideyoshi').roleName).toBe('Daimyo');
+    expect(appointed.members.find((m: any) => m.nickname === 'Hideyoshi').roleName).toBe('Minister of State');
     expect((await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'leader' })).body.error.code).toBe('INVALID');
 
     // The Treasurer may build (the builders may be busy, but the role is no longer the obstacle), not recruit.

@@ -113,7 +113,7 @@ export async function grant(
       RETURNING gold, food, wood, stone, iron`,
     [clanId, c.gold, c.food, c.wood, c.stone, c.iron, g.now],
   );
-  if (!after) throw new Error(`No resources row for clan ${clanId}`);
+  if (!after) throw new Error(`No resources row for nation ${clanId}`);
   await writeLedger(g, clanId, c, after, reason, ref);
   if (announce) await emitClan(g, clanId, 'resource:updated', { resources: after });
   return after;
@@ -130,7 +130,7 @@ export async function applyHourly(
   ref: LedgerRef,
 ): Promise<{ after: ResourceBag; shortfall: ResourceBag }> {
   const before = await one<ResourceBag>(g.tx, 'SELECT gold, food, wood, stone, iron FROM resources WHERE clan_id = $1 FOR UPDATE', [clanId]);
-  if (!before) throw new Error(`No resources row for clan ${clanId}`);
+  if (!before) throw new Error(`No resources row for nation ${clanId}`);
   const running: ResourceBag = { ...before };
   const shortfall = emptyBag();
   for (const entry of entries) {

@@ -127,7 +127,7 @@ export async function resolveEspionage(g: G, opId: string): Promise<void> {
     await notifyClan(g, province.owner_clan_id, {
       type: 'espionage',
       title: `Spies caught in ${province.name}`,
-      body: `Your guards intercepted scouts of the ${clan.name} clan in ${province.name}.`,
+      body: `Your guards intercepted scouts of the nation of ${clan.name} in ${province.name}.`,
       link: '/game/intel',
     });
   }

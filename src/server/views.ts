@@ -551,15 +551,15 @@ export async function buildProvince(db: Db, viewer: Viewer, provinceId: string, 
   let scoutBlockedReason: string | null = null;
   let odds = { success: 0, detection: 0, cost: WORLD.scout.cost as number, minutes: WORLD.scout.minutes as number };
   if (clan && p.owner_clan_id !== clan.id) {
-    if (owner && !atWar(view.wars, clan.id, owner.id)) attackBlockedReason = `You are not at war with the ${owner.name} clan. Declare war first.`;
+    if (owner && !atWar(view.wars, clan.id, owner.id)) attackBlockedReason = `You are not at war with the nation of ${owner.name}. Declare war first.`;
     else if (!view.provinces.some((x) => x.owner_clan_id === clan.id)) attackBlockedReason = 'You hold no province to march from';
     else canAttack = true;
     scoutBlockedReason = await scoutBlockReason(db, clan.id, p);
     canScout = !scoutBlockedReason;
     odds = scoutOdds(mods, owner ? view.progress.get(owner.id)?.mods ?? emptyModifiers() : emptyModifiers());
   } else if (!clan) {
-    attackBlockedReason = 'Found a clan first';
-    scoutBlockedReason = 'Found a clan first';
+    attackBlockedReason = 'Found a nation first';
+    scoutBlockedReason = 'Found a nation first';
   }
 
   return {

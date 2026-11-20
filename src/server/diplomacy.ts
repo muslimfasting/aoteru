@@ -19,11 +19,11 @@ export function isProtected(clan: Pick<ClanRow, 'protected_until'>, now: Date): 
 /** Why `clan` may not declare war on `target` right now, or null if it may. */
 export async function warBlockReason(g: Pick<G, 'tx' | 'now' | 'speed'>, clan: ClanRow, target: ClanRow, wars: WarRow[]): Promise<string | null> {
   if (clan.id === target.id) return 'You cannot declare war on yourself';
-  if (target.status !== 'active') return 'That clan has fallen';
+  if (target.status !== 'active') return 'That nation has fallen';
   if (atWar(wars, clan.id, target.id)) return 'You are already at war';
-  if (isProtected(target, g.now)) return 'A newly founded clan is under the truce of the realm and cannot be attacked yet';
+  if (isProtected(target, g.now)) return 'A newly founded nation is under the truce of the realm and cannot be attacked yet';
   const pact = pactBetween(await loadActivePacts(g.tx, g.now), clan.id, target.id);
-  if (pact) return pact.type === 'alliance' ? 'You are allied with that clan. End the alliance first.' : 'A non-aggression pact binds you. End it first.';
+  if (pact) return pact.type === 'alliance' ? 'You are allied with that nation. End the alliance first.' : 'A non-aggression pact binds you. End it first.';
   const broken = await one<{ ended_at: Date }>(
     g.tx,
     `SELECT ended_at FROM pacts
@@ -33,7 +33,7 @@ export async function warBlockReason(g: Pick<G, 'tx' | 'now' | 'speed'>, clan: C
     [clan.id, target.id],
   );
   if (broken && addMs(broken.ended_at, gameMs(g, PACT_BREAK_COOLDOWN_HOURS * 60)).getTime() > g.now.getTime()) {
-    return 'You have only just broken your word to that clan. Honour demands you wait before declaring war.';
+    return 'You have only just broken your word to that nation. Honour demands you wait before declaring war.';
   }
   const lastPeace = await one<{ ended_at: Date }>(
     g.tx,
@@ -52,7 +52,7 @@ export async function warBlockReason(g: Pick<G, 'tx' | 'now' | 'speed'>, clan: C
 /** Declare war (MP-03): costs gold, ends the declarer's own protection, and is announced to the realm. */
 export async function declareWar(g: G, clan: ClanRow, targetClanId: string): Promise<string> {
   const target = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [targetClanId]);
-  if (!target) throw notFound('Clan');
+  if (!target) throw notFound('Nation');
   const wars = await loadActiveWars(g.tx);
   const reason = await warBlockReason(g, clan, target, wars);
   if (reason) throw conflict('WAR_BLOCKED', reason);
@@ -74,7 +74,7 @@ export async function declareWar(g: G, clan: ClanRow, targetClanId: string): Pro
   await notifyClan(g, target.id, {
     type: 'war',
     title: `${clan.name} has declared war on you`,
-    body: `${clan.daimyo_name} of the ${clan.name} clan has declared war. Look to your borders.`,
+    body: `${clan.daimyo_name} of the nation of ${clan.name} has declared war. Look to your borders.`,
     link: '/game/diplomacy',
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { warId: war!.id });
@@ -92,7 +92,7 @@ async function endWar(g: G, war: WarRow, a: ClanRow, b: ClanRow): Promise<void> 
   await chronicle(g, {
     type: 'peace',
     title: `Peace between ${a.name} and ${b.name}`,
-    description: `On ${dayLabel(g.tick)}, envoys of the ${a.name} and ${b.name} clans exchanged oaths and the fighting ceased.`,
+    description: `On ${dayLabel(g.tick)}, envoys of the ${a.name} and ${b.name} nations exchanged oaths and the fighting ceased.`,
     clanId: a.id,
   });
   for (const clan of [a, b]) {
@@ -113,9 +113,9 @@ async function totalPower(tx: Db, clanId: string): Promise<number> {
  */
 export async function proposePeace(g: G, clan: ClanRow, targetClanId: string): Promise<void> {
   const target = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1', [targetClanId]);
-  if (!target) throw notFound('Clan');
+  if (!target) throw notFound('Nation');
   const war = atWar(await loadActiveWars(g.tx), clan.id, target.id);
-  if (!war) throw conflict('NOT_AT_WAR', 'You are not at war with that clan');
+  if (!war) throw conflict('NOT_AT_WAR', 'You are not at war with that nation');
   const pending = await one(g.tx, `SELECT id FROM diplomacy WHERE from_clan_id = $1 AND to_clan_id = $2 AND type = 'peace' AND status = 'pending'`, [
     clan.id,
     target.id,
@@ -192,7 +192,7 @@ export async function respondPeace(g: G, clan: ClanRow, proposalId: string, acce
     throw conflict('PROPOSAL_CLOSED', 'That proposal has expired');
   }
   const from = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1', [proposal.from_clan_id]);
-  if (!from) throw invalid('The proposing clan no longer exists');
+  if (!from) throw invalid('The proposing nation no longer exists');
 
   await g.tx.query(`UPDATE diplomacy SET status = $2, responded_at = $3 WHERE id = $1`, [proposalId, accept ? 'accepted' : 'rejected', g.now]);
   if (accept) {

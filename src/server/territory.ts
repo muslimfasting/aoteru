@@ -104,15 +104,15 @@ async function clanFalls(g: G, clan: ClanRow, lastProvince: ProvinceRow): Promis
   await g.tx.query('DELETE FROM armies WHERE clan_id = $1', [clan.id]);
   await chronicle(g, {
     type: 'fallen',
-    title: `The house of ${clan.name} has fallen`,
-    description: `On ${dayLabel(g.tick)}, with the loss of ${lastProvince.name}, the ${clan.name} clan held no land in the realm. ${clan.daimyo_name} vanished from the records.`,
+    title: `The government of ${clan.name} has fallen`,
+    description: `On ${dayLabel(g.tick)}, with the loss of ${lastProvince.name}, the nation of ${clan.name} held no land in the realm. ${clan.daimyo_name} vanished from the records.`,
     clanId: clan.id,
     provinceId: lastProvince.id,
   });
   await notifyClan(g, clan.id, {
     type: 'province',
-    title: 'Your clan has fallen',
-    body: 'Your last province is lost. Everyone keeps what they have learned in the Five Pillars. The leader may found a new seat in any unclaimed starting province; members may also leave for another clan.',
+    title: 'Your nation has fallen',
+    body: 'Your last province is lost. Everyone keeps what they have learned in the Five Pillars. The Chancellor may found a new seat in any unclaimed starting province; officials may also leave for another nation.',
     link: '/game/clan',
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { clanId: clan.id });
@@ -135,7 +135,7 @@ export async function updateHegemony(g: G): Promise<void> {
     await chronicle(g, {
       type: 'hegemony',
       title: `The ${clan?.name ?? 'former'} hegemony is broken`,
-      description: `On ${dayLabel(g.tick)}, the ${clan?.name ?? 'ruling'} clan no longer held enough of Kansai to command it. The realm is contested once more.`,
+      description: `On ${dayLabel(g.tick)}, the nation of ${clan?.name ?? 'ruling'} no longer held enough of Kansai to command it. The realm is contested once more.`,
       clanId: current,
     });
   }
@@ -149,7 +149,7 @@ export async function updateHegemony(g: G): Promise<void> {
     await chronicle(g, {
       type: 'hegemony',
       title: `${clan.daimyo_name} is proclaimed Hegemon of Kansai`,
-      description: `On ${dayLabel(g.tick)}, holding ${top.n} provinces, the ${clan.name} clan was acknowledged master of the home provinces. Rivals now gather against the new order.`,
+      description: `On ${dayLabel(g.tick)}, holding ${top.n} provinces, the nation of ${clan.name} was acknowledged master of the home provinces. Rivals now gather against the new order.`,
       clanId: clan.id,
     });
     const players = await rows<{ id: string }>(g.tx, 'SELECT id FROM players');
@@ -157,7 +157,7 @@ export async function updateHegemony(g: G): Promise<void> {
       await notifyPlayer(g, p.id, {
         type: 'event',
         title: `${clan.daimyo_name} is proclaimed Hegemon of Kansai`,
-        body: `The ${clan.name} clan now holds ${top.n} provinces. The struggle continues: break the hegemony or defend it.`,
+        body: `The nation of ${clan.name} now holds ${top.n} provinces. The struggle continues: break the hegemony or defend it.`,
         link: '/game/map',
       });
     }

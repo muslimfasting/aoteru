@@ -85,7 +85,7 @@ export async function createBattle(g: G, army: ArmyRow, province: ProvinceRow): 
   await notifyClan(g, province.owner_clan_id, {
     type: 'battle',
     title: `${province.name} is under attack`,
-    body: `The ${attacker?.name ?? 'enemy'} clan is assaulting ${province.name}.`,
+    body: `The nation of ${attacker?.name ?? 'enemy'} is assaulting ${province.name}.`,
     link: `/game/battles/${battle!.id}`,
   });
   return battle!.id;
@@ -184,7 +184,7 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
     await notifyClan(g, attacker.id, {
       type: 'battle',
       title: `The assault on ${province.name} is called off`,
-      body: `You are no longer at war with the lord of ${province.name}. Your army is marching home.`,
+      body: `You are no longer at war with the holders of ${province.name}. Your army is marching home.`,
       link: '/game/military',
     });
     await abandonPlan(g, army.plan_id, 'peace was made');
@@ -357,15 +357,15 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
     type: 'battle',
     title: captured ? `${province.name} has fallen` : `${province.name} holds`,
     body: captured
-      ? `The ${attacker.name} clan has taken ${province.name}. You lost ${defenderLost} soldiers${refuge ? `; the survivors withdrew to ${refuge}` : ''}.`
-      : `Your garrison threw back the ${attacker.name} clan. You lost ${defenderLost} soldiers; the enemy lost ${attackerLost}.`,
+      ? `The nation of ${attacker.name} has taken ${province.name}. You lost ${defenderLost} soldiers${refuge ? `; the survivors withdrew to ${refuge}` : ''}.`
+      : `Your garrison threw back the nation of ${attacker.name}. You lost ${defenderLost} soldiers; the enemy lost ${attackerLost}.`,
     link: `/game/battles/${battle.id}`,
   });
   if (captured) {
     await chronicle(g, {
       type: 'conquest',
       title: `${attacker.name} takes ${province.name}`,
-      description: `On ${dayLabel(g.tick)}, under ${WEATHER_INFO[weather].name.toLowerCase()}, the ${attacker.name} banner was raised over ${province.name}, taken from ${defender ? `the ${defenderName} clan` : 'its local warriors'}. ${attackerLost + defenderLost} men fell.`,
+      description: `On ${dayLabel(g.tick)}, under ${WEATHER_INFO[weather].name.toLowerCase()}, the ${attacker.name} banner was raised over ${province.name}, taken from ${defender ? `the nation of ${defenderName}` : 'its local warriors'}. ${attackerLost + defenderLost} men fell.`,
       provinceId: province.id,
       clanId: attacker.id,
     });

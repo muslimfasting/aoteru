@@ -241,10 +241,10 @@ function joinState(view: WorldView, clan: ClanRow, ctx: JoinContext): ClanJoinSt
   const invitationId = ctx.invitations.get(clan.id) ?? null;
   const base = { applicationId, invitationId };
   if (ctx.viewer.member?.clanId === clan.id) return { option: null, blockedReason: 'You are a member', ...base };
-  if (clan.is_npc) return { option: null, blockedReason: 'A house of the old order; it takes in no outsiders', ...base };
-  if (clan.status !== 'active') return { option: null, blockedReason: 'This clan has fallen', ...base };
-  if (ctx.viewer.member) return { option: null, blockedReason: 'Leave your clan before joining another', ...base };
-  if ((view.memberCounts.get(clan.id) ?? 0) >= CLAN_RULES.maxMembers) return { option: null, blockedReason: 'This clan is full', ...base };
+  if (clan.is_npc) return { option: null, blockedReason: 'A government of the old order; it takes in no outsiders', ...base };
+  if (clan.status !== 'active') return { option: null, blockedReason: 'This nation has fallen', ...base };
+  if (ctx.viewer.member) return { option: null, blockedReason: 'Leave your nation before joining another', ...base };
+  if ((view.memberCounts.get(clan.id) ?? 0) >= CLAN_RULES.maxMembers) return { option: null, blockedReason: 'This nation is full', ...base };
   if (invitationId) return { option: 'accept_invitation', blockedReason: null, ...base };
   if (clan.recruitment === 'open') return { option: 'join', blockedReason: null, ...base };
   if (clan.recruitment === 'application') {
@@ -337,7 +337,7 @@ export async function buildClanDirectory(db: Db, viewer: Viewer, now: Date, filt
 export async function buildClanProfile(db: Db, viewer: Viewer, clanId: string, now: Date): Promise<ClanProfileResponse> {
   const view = await loadWorldView(db, now);
   const clan = view.clans.find((c) => c.id === clanId && c.status !== 'disbanded');
-  if (!clan) throw notFound('Clan');
+  if (!clan) throw notFound('Nation');
   const ctx = await joinContext(db, viewer);
   return {
     clan: clanPublic(view, clan),
@@ -357,7 +357,7 @@ export async function buildClanProfile(db: Db, viewer: Viewer, clanId: string, n
 // ---------------------------------------------------------------------------
 
 export async function buildClanHub(db: Db, viewer: Viewer, now: Date): Promise<ClanHubResponse> {
-  if (!viewer.clan || !viewer.member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+  if (!viewer.clan || !viewer.member) throw new GameError('NO_CLAN', 'Join or found a nation first', 409);
   const clan = viewer.clan;
   const view = await loadWorldView(db, now);
   const canManageMembers = viewer.member.permissions.includes('manage_members');
@@ -494,7 +494,7 @@ export async function markChatRead(db: Db, viewer: Viewer, thread: string): Prom
 export async function buildChat(db: Db, viewer: Viewer, channel: ChatChannel, withId: string | null): Promise<ChatResponse> {
   const me = viewer.player.id;
   if (channel === 'clan') {
-    if (!viewer.member) throw new GameError('NO_CLAN', 'Join a clan to use the clan channel', 409);
+    if (!viewer.member) throw new GameError('NO_CLAN', 'Join a nation to use the nation channel', 409);
     const res = await rows<any>(db, `${CHAT_SELECT} WHERE m.channel = 'clan' AND m.clan_id = $1 ORDER BY m.id DESC LIMIT 100`, [viewer.member.clanId]);
     await markChatRead(db, viewer, 'clan');
     return { channel, messages: res.reverse().map((m) => toChat(m, me)), with: null };

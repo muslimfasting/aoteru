@@ -70,7 +70,7 @@ async function memberOf(tx: Db, clan: ClanRow, playerId: string): Promise<{ play
     'SELECT m.player_id, p.nickname FROM clan_members m JOIN players p ON p.id = m.player_id WHERE m.player_id = $1 AND m.clan_id = $2',
     [playerId, clan.id],
   );
-  if (!row) throw conflict('NOT_A_MEMBER', 'That player is not a member of the clan');
+  if (!row) throw conflict('NOT_A_MEMBER', 'That player is not an official of the nation');
   return row;
 }
 
@@ -82,8 +82,8 @@ async function validate(g: G, clan: ClanRow, input: WarPlanInput) {
   const origin = await one<ProvinceRow>(g.tx, 'SELECT * FROM provinces WHERE id = $1', [input.originProvinceId]);
   const target = await one<ProvinceRow>(g.tx, 'SELECT * FROM provinces WHERE id = $1', [input.targetProvinceId]);
   if (!origin || !target) throw notFound('Province');
-  if (origin.owner_clan_id !== clan.id) throw conflict('PLAN_INVALID', 'The army must set out from a province the clan holds');
-  if (target.owner_clan_id === clan.id) throw conflict('PLAN_INVALID', 'The clan already holds the target');
+  if (origin.owner_clan_id !== clan.id) throw conflict('PLAN_INVALID', 'The army must set out from a province the nation holds');
+  if (target.owner_clan_id === clan.id) throw conflict('PLAN_INVALID', 'The nation already holds the target');
   const units = normalizeUnits(input.units ?? {});
   if (totalUnits(units) <= 0) throw invalid('Choose the soldiers to send');
   let scheduledAt: Date | null = null;
