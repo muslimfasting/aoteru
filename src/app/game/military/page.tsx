@@ -34,6 +34,9 @@ function MilitaryScreen() {
   const isDesktop = useIsDesktop();
   const [tab, setTab] = useState<Tab>(params.get('province') ? 'recruit' : 'armies');
   const [march, setMarch] = useState<{ sourceId?: string; targetId?: string } | null>(null);
+  const { lacks } = useGame();
+  // Moving armies and attacking need the Command permission.
+  const noCommand = lacks('command');
 
   if (army.error && !army.data) return <ErrorState message={army.error.message} onRetry={() => void army.refresh()} />;
   if (!army.data) return <LoadingState label="Calling the muster roll…" />;
@@ -43,7 +46,7 @@ function MilitaryScreen() {
   const recruit = <RecruitPanel garrisons={a.garrisons} initialProvinceId={params.get('province')} />;
   const armies = (
     <div className="space-y-4 lg:space-y-5">
-      <Garrisons army={a} onSend={(id) => setMarch({ sourceId: id })} />
+      <Garrisons army={a} onSend={(id) => setMarch({ sourceId: id })} blocked={noCommand} />
       <Movements movements={a.movements} provinceName={(id) => map.data?.provinces.find((p) => p.id === id)?.name ?? a.garrisons.find((g) => g.provinceId === id)?.provinceName ?? '…'} onRefresh={() => void army.refresh()} />
       <RecruitmentQueue army={a} onRefresh={() => void army.refresh()} />
     </div>
@@ -58,7 +61,7 @@ function MilitaryScreen() {
         subtitle="Muster soldiers, move armies and read the reports from the field."
         action={
           <div className="hidden sm:block">
-            <ActionButton variant="primary" onClick={() => setMarch({})} reason={a.total === 0 ? 'No soldiers to command' : null}>
+            <ActionButton variant="primary" onClick={() => setMarch({})} reason={noCommand ?? (a.total === 0 ? 'No soldiers to command' : null)}>
               Send an army
             </ActionButton>
           </div>
@@ -76,7 +79,7 @@ function MilitaryScreen() {
       </div>
 
       <div className="mb-4 sm:hidden">
-        <ActionButton variant="primary" onClick={() => setMarch({})} reason={a.total === 0 ? 'No soldiers to command' : null} wrapperClassName="flex w-full" className="w-full">
+        <ActionButton variant="primary" onClick={() => setMarch({})} reason={noCommand ?? (a.total === 0 ? 'No soldiers to command' : null)} wrapperClassName="flex w-full" className="w-full">
           Send an army
         </ActionButton>
       </div>
@@ -112,7 +115,7 @@ function MilitaryScreen() {
 
 // ---------------------------------------------------------------------------
 
-function Garrisons({ army, onSend }: { army: ArmyOverviewResponse; onSend: (provinceId: string) => void }) {
+function Garrisons({ army, onSend, blocked }: { army: ArmyOverviewResponse; onSend: (provinceId: string) => void; blocked: string | null }) {
   return (
     <Panel title="Garrisons" kanji="守" bodyClassName="p-0">
       {army.garrisons.length === 0 ? (
@@ -126,7 +129,7 @@ function Garrisons({ army, onSend }: { army: ArmyOverviewResponse; onSend: (prov
                 <UnitsRow units={g.units} className="mt-1" />
               </div>
               <div className="num text-right text-sm text-muted">{fmt(g.power)} power</div>
-              <ActionButton size="sm" onClick={() => onSend(g.provinceId)} reason={g.power === 0 ? 'Empty' : null}>
+              <ActionButton size="sm" onClick={() => onSend(g.provinceId)} reason={g.power === 0 ? 'Empty' : blocked ? 'No command' : null}>
                 Send
               </ActionButton>
             </li>
@@ -196,7 +199,7 @@ function RecruitPanel({ garrisons, initialProvinceId }: { garrisons: ArmyOvervie
     if (!provinceId && garrisons[0]) setProvinceId(garrisons[0].provinceId);
   }, [provinceId, garrisons]);
   const state = useApi<ProvinceDetailResponse>(provinceId ? `/api/provinces/${provinceId}` : null, EVENTS.province);
-  const { resources } = useGame();
+  const { resources, lacks } = useGame();
   const action = useAction();
   const [unit, setUnit] = useState<UnitType>('ashigaru');
   const [count, setCount] = useState(0);
@@ -212,6 +215,7 @@ function RecruitPanel({ garrisons, initialProvinceId }: { garrisons: ArmyOvervie
   const cost = unitCost(unit, count);
   const missing = missingResources(resources, cost);
   const reason =
+    lacks('recruit') ??
     option?.blockedReason ??
     (max <= 0 ? 'Not enough resources, people or army capacity' : null) ??
     (count <= 0 ? 'Choose how many to recruit' : null) ??

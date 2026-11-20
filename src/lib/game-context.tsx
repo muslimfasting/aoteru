@@ -3,13 +3,21 @@
 /**
  * Game session state shared by every screen inside /game.
  *
- * Loads the player, keeps the resource header current, and runs the realtime
- * loop: GET /api/sync is polled every few seconds while the tab is visible and
- * each event it returns is re-emitted on the client event bus.
+ * Loads the player — with or without a nation — keeps the treasury, the personal
+ * purse and the unread counters current, and runs the realtime loop: GET
+ * /api/sync is polled every few seconds while the tab is visible and each
+ * event it returns is re-emitted on the client event bus.
+ *
+ * Two hooks read it:
+ *  - `useSession()` for screens every player can open (discovery, messages,
+ *    pillars, ranking, the map, settings). The nation may be null.
+ *  - `useGame()` for screens that manage a nation. They are only rendered for
+ *    members of an active nation (see `ClanGate`), so the nation is always there.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ClanSelfDTO, MeResponse, PlayerDTO, SyncResponse, WorldMetaDTO } from '@/game/api';
+import type { ClanSelfDTO, MeResponse, MembershipDTO, PersonalDTO, PlayerDTO, SyncResponse, WorldMetaDTO } from '@/game/api';
+import { PERMISSION_DEFS, type ClanPermission } from '@/game/clan';
 import type { ResourceBag } from '@/game/config';
 import { ApiError, apiGet } from './api';
 import { syncServerClock } from './clock';
@@ -19,25 +27,54 @@ import { useToast } from '@/components/toast';
 const POLL_MS = 3000;
 const MAX_BACKOFF_MS = 30000;
 
-export interface GameState {
+export interface SessionState {
   player: PlayerDTO;
-  clan: ClanSelfDTO;
+  /** The nation the player belongs to — even one that has fallen. Null without a nation. */
+  clan: ClanSelfDTO | null;
+  /** True when the player belongs to a nation that is still active. */
+  hasClan: boolean;
+  membership: MembershipDTO | null;
+  personal: PersonalDTO;
+  /** Live personal purse; updated on every sync. */
+  purse: ResourceBag;
   world: WorldMetaDTO;
-  /** Live treasury; updated on every sync. */
-  resources: ResourceBag;
+  /** Live National Treasury; updated on every sync. Null without a nation. */
+  resources: ResourceBag | null;
+  /** Unread reports. */
   unread: number;
   setUnread: (n: number) => void;
+  /** Unread private messages plus unread messages in the nation channel. */
+  unreadMessages: number;
+  setUnreadMessages: (n: number) => void;
+  pendingInvitations: number;
   /** False while the realtime loop cannot reach the server. */
   online: boolean;
+  /** Does the player's role hold this permission in their nation? */
+  can: (permission: ClanPermission) => boolean;
+  /** Why the player may not do something that needs this permission, or null if they may. */
+  lacks: (permission: ClanPermission) => string | null;
   refreshMe: () => Promise<void>;
 }
 
-const GameContext = createContext<GameState | null>(null);
+export interface GameState extends SessionState {
+  clan: ClanSelfDTO;
+  membership: MembershipDTO;
+  resources: ResourceBag;
+}
 
-export function useGame(): GameState {
+const GameContext = createContext<SessionState | null>(null);
+
+export function useSession(): SessionState {
   const ctx = useContext(GameContext);
-  if (!ctx) throw new Error('useGame must be used inside <GameProvider>');
+  if (!ctx) throw new Error('useSession must be used inside <GameProvider>');
   return ctx;
+}
+
+/** For screens that manage a nation. Throws if rendered without one: wrap such screens in the nation gate. */
+export function useGame(): GameState {
+  const ctx = useSession();
+  if (!ctx.clan || !ctx.membership || !ctx.resources) throw new Error('This screen needs a nation');
+  return ctx as GameState;
 }
 
 interface ProviderProps {
@@ -54,7 +91,9 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
   const [me, setMe] = useState<MeResponse | null>(null);
   const [world, setWorld] = useState<WorldMetaDTO | null>(null);
   const [resources, setResources] = useState<ResourceBag | null>(null);
+  const [purse, setPurse] = useState<ResourceBag | null>(null);
   const [unread, setUnread] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [online, setOnline] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const redirected = useRef(false);
@@ -65,15 +104,11 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
       syncServerClock(res.world.now);
       setMe(res);
       setWorld(res.world);
-      if (res.clan) setResources(res.clan.resources);
+      setResources(res.clan ? res.clan.resources : null);
+      setPurse(res.personal.purse);
       setUnread(res.unreadNotifications);
+      setUnreadMessages(res.unreadMessages);
       setError(null);
-      if (!res.clan || res.clan.status === 'fallen') {
-        if (!redirected.current) {
-          redirected.current = true;
-          router.replace('/found');
-        }
-      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         if (!redirected.current) {
@@ -82,7 +117,7 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
         }
         return;
       }
-      setError(err instanceof Error ? err.message : 'Could not load your realm.');
+      setError(err instanceof Error ? err.message : 'Could not load the game.');
     }
   }, [router]);
 
@@ -99,7 +134,7 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
     });
   }, [router]);
 
-  // Keep the profile (income, army, rank) fresh when the world changes.
+  // Keep the profile (income, army, rank, membership) fresh when the world changes.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const trigger = () => {
@@ -116,6 +151,14 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
     };
   }, [loadMe]);
 
+  // The purse arrives with its own event.
+  useEffect(() => {
+    return bus.on('purse:updated', (payload) => {
+      const next = payload.purse as ResourceBag | undefined;
+      if (next && typeof next.gold === 'number') setPurse(next);
+    });
+  }, []);
+
   // Surface new notifications as toasts.
   useEffect(() => {
     return bus.on('notification:new', (payload) => {
@@ -126,7 +169,7 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
   }, [toast]);
 
   // Realtime loop.
-  const ready = me !== null && me.clan !== null && me.clan.status !== 'fallen';
+  const ready = me !== null;
   useEffect(() => {
     if (!ready) return;
     let stopped = false;
@@ -152,8 +195,10 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
         failures = 0;
         syncServerClock(res.world.now);
         setWorld(res.world);
-        if (res.resources) setResources(res.resources);
+        setResources(res.resources);
+        setPurse(res.purse);
         setUnread(res.unreadNotifications);
+        setUnreadMessages(res.unreadMessages);
         setOnline(true);
         for (const ev of res.events) bus.emit(ev.event, ev.payload ?? {});
       } catch (err) {
@@ -187,19 +232,35 @@ export function GameProvider({ children, fallback, renderError }: ProviderProps)
     };
   }, [ready]);
 
-  const value = useMemo<GameState | null>(() => {
-    if (!me || !me.clan || me.clan.status === 'fallen' || !world) return null;
+  const value = useMemo<SessionState | null>(() => {
+    if (!me || !world) return null;
+    const membership = me.clan ? me.membership : null;
+    const can = (permission: ClanPermission) => !!membership && membership.permissions.includes(permission);
+    const lacks = (permission: ClanPermission) => {
+      if (!membership) return 'Join or found a nation first';
+      if (membership.permissions.includes(permission)) return null;
+      return `Needs the ${PERMISSION_DEFS[permission].name} permission (your role: ${membership.roleName})`;
+    };
     return {
       player: me.player,
       clan: me.clan,
+      hasClan: !!me.clan && me.clan.status === 'active',
+      membership,
+      personal: me.personal,
+      purse: purse ?? me.personal.purse,
       world,
-      resources: resources ?? me.clan.resources,
+      resources: me.clan ? (resources ?? me.clan.resources) : null,
       unread,
       setUnread,
+      unreadMessages,
+      setUnreadMessages,
+      pendingInvitations: me.pendingInvitations,
       online,
+      can,
+      lacks,
       refreshMe: loadMe,
     };
-  }, [me, world, resources, unread, online, loadMe]);
+  }, [me, world, resources, purse, unread, unreadMessages, online, loadMe]);
 
   if (error && !me) return <>{renderError(error, () => void loadMe())}</>;
   if (!value) return <>{fallback}</>;

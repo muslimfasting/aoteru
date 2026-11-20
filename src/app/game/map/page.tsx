@@ -77,7 +77,7 @@ function RealmSummary({ data, onSelect }: { data: WorldMapResponse; onSelect: (i
       </div>
 
       <section>
-        <div className="heading-rule mb-2">Clans</div>
+        <div className="heading-rule mb-2">Nations</div>
         <ul className="space-y-1.5">
           {clans.map((c) => (
             <li key={c.id} className="flex items-center gap-2.5">

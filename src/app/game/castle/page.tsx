@@ -90,7 +90,9 @@ function ProvinceSwitcher({ provinces, selectedId, onSelect }: { provinces: Prov
 
 function ProvinceManagement({ provinceId }: { provinceId: string }) {
   const state = useApi<ProvinceDetailResponse>(`/api/provinces/${provinceId}`, EVENTS.province);
-  const { resources, clan, world } = useGame();
+  const { resources, clan, world, lacks } = useGame();
+  // Building and festivals spend the shared treasury: the member's role must allow it.
+  const noBuild = lacks('build');
   const build = useAction();
   const festival = useAction();
   const now = useNow();
@@ -122,7 +124,9 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
 
   const festivalWait = own.festival.availableAt && Date.parse(own.festival.availableAt) > now ? own.festival.availableAt : null;
   const festivalMissing = missingResources(resources, own.festival.cost);
-  const festivalReason = festivalWait
+  const festivalReason = noBuild
+    ? noBuild
+    : festivalWait
     ? 'The last festival is still fresh in memory'
     : festivalMissing.length
       ? `Not enough ${festivalMissing.map((k) => RESOURCE_INFO[k].name.toLowerCase()).join(', ')}`
@@ -153,6 +157,7 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
             const def = BUILDINGS[b.type];
             const missing = missingResources(resources, b.nextCost);
             const reason =
+              noBuild ??
               b.blockedReason ??
               (own.constructionBusy && !b.upgrading ? 'The builders are busy with another project' : null) ??
               (missing.length ? `Not enough ${missing.map((k) => RESOURCE_INFO[k].name.toLowerCase()).join(', ')}` : null);

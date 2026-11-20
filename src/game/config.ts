@@ -8,7 +8,7 @@
 
 export const GAME_NAME = 'Aoteru';
 export const GAME_SUBTITLE = 'Rise of Japan';
-export const GAME_TAGLINE = 'Unite the Clans. Conquer Japan. Become Shogun.';
+export const GAME_TAGLINE = 'Serve the Nation. Master the Art of War. Reunify Japan.';
 
 // ---------------------------------------------------------------------------
 // Resources

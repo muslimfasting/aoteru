@@ -58,7 +58,7 @@ export function MonGlyph({ mon }: { mon: string }) {
   }
 }
 
-/** Round crest badge in the clan colour. Used in lists and on the map. */
+/** Round crest badge in the nation colour. Used in lists and on the map. */
 export function MonBadge({ color, mon, size = 28, className, title }: { color: string; mon: string; size?: number; className?: string; title?: string }) {
   return (
     <svg width={size} height={size} viewBox="-12 -12 24 24" className={className} role={title ? 'img' : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
@@ -82,7 +82,7 @@ export function NeutralBadge({ size = 28, className }: { size?: number; classNam
 }
 
 /**
- * Nobori war banner: a tall flag on a pole with the clan crest.
+ * Nobori war banner: a tall flag on a pole with the nation crest.
  * `size` is the rendered height in pixels.
  */
 export function Banner({ color, mon, size = 56, className, title }: { color: string; mon: string; size?: number; className?: string; title?: string }) {

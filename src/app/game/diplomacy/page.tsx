@@ -14,7 +14,9 @@ import { useAction, useApi } from '@/lib/hooks';
 
 export default function DiplomacyPage() {
   const state = useApi<DiplomacyResponse>('/api/diplomacy', EVENTS.diplomacy);
-  const { clan, resources } = useGame();
+  const { clan, resources, lacks } = useGame();
+  // War and peace are decided by officials whose role holds the Diplomacy permission.
+  const noDiplomacy = lacks('diplomacy');
   const action = useAction();
   const now = useNow();
   const [warTarget, setWarTarget] = useState<DiplomacyClanDTO | null>(null);
@@ -41,7 +43,7 @@ export default function DiplomacyPage() {
 
   const atWar = data.clans.filter((c) => c.relation === 'war');
   const others = data.clans.filter((c) => c.relation !== 'war');
-  const clanName = (id: string) => (id === clan.id ? `${clan.name} (you)` : (data.clans.find((c) => c.clan.id === id)?.clan.name ?? 'a fallen clan'));
+  const clanName = (id: string) => (id === clan.id ? `${clan.name} (you)` : (data.clans.find((c) => c.clan.id === id)?.clan.name ?? 'a fallen nation'));
   const myProtection = clan.protectedUntil && Date.parse(clan.protectedUntil) > now ? clan.protectedUntil : null;
 
   const row = (c: DiplomacyClanDTO) => (
@@ -49,6 +51,7 @@ export default function DiplomacyPage() {
       key={c.clan.id}
       entry={c}
       busy={action.busy}
+      blocked={noDiplomacy}
       warCost={data.warCost}
       now={now}
       onDeclare={() => setWarTarget(c)}
@@ -66,10 +69,10 @@ export default function DiplomacyPage() {
 
   return (
     <div>
-      <PageHeader kanji="交" title="Diplomacy" subtitle="Know your rivals. War must be declared before you may march on another clan's land." />
+      <PageHeader kanji="交" title="Diplomacy" subtitle="Know your rivals. War must be declared before you may march on another nation's land." />
 
       {data.clans.length === 0 ? (
-        <EmptyState title="No other clans">You are alone in the realm — for now.</EmptyState>
+        <EmptyState title="No other nations">You are alone in the realm — for now.</EmptyState>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-5">
           <div className="space-y-4 lg:space-y-5">
@@ -78,8 +81,8 @@ export default function DiplomacyPage() {
                 <ul className="divide-y divide-gold/10">{atWar.map(row)}</ul>
               </Panel>
             ) : null}
-            <Panel title={atWar.length > 0 ? 'Other clans' : 'Clans of the realm'} kanji="家" bodyClassName="p-0">
-              {others.length === 0 ? <p className="p-4 text-sm text-muted">You are at war with every clan in the realm.</p> : <ul className="divide-y divide-gold/10">{others.map(row)}</ul>}
+            <Panel title={atWar.length > 0 ? 'Other nations' : 'Nations of the realm'} kanji="家" bodyClassName="p-0">
+              {others.length === 0 ? <p className="p-4 text-sm text-muted">You are at war with every nation in the realm.</p> : <ul className="divide-y divide-gold/10">{others.map(row)}</ul>}
             </Panel>
           </div>
 
@@ -89,9 +92,9 @@ export default function DiplomacyPage() {
                 <li>
                   Declaring war costs <strong className="text-gold-bright">{fmt(data.warCost)} gold</strong> for envoys and banners. Culture skills lower it.
                 </li>
-                <li>Unclaimed provinces can be attacked at any time; another clan&apos;s land only while you are at war with it.</li>
-                <li>New clans stand under the shogunate&apos;s truce and cannot be attacked until it lapses.</li>
-                <li>Either side may offer peace. Once made, a truce forbids a new war between the two clans for a time.</li>
+                <li>Unclaimed provinces can be attacked at any time; another nation&apos;s land only while you are at war with it.</li>
+                <li>New nations stand under the founding truce and cannot be attacked until it lapses.</li>
+                <li>Either side may offer peace. Once made, a truce forbids a new war between the two nations for a time.</li>
               </ul>
               {myProtection ? (
                 <p className="mt-3 rounded-[3px] border border-gold/30 bg-gold/10 px-3 py-2 text-sm">
@@ -102,7 +105,7 @@ export default function DiplomacyPage() {
 
             <Panel title="History of your wars" kanji="史">
               {data.wars.length === 0 ? (
-                <p className="text-sm text-muted">You have fought no wars. The chronicle of your house is still unstained.</p>
+                <p className="text-sm text-muted">You have fought no wars. The chronicle of your nation is still unstained.</p>
               ) : (
                 <ul className="space-y-2.5">
                   {data.wars.map((w) => (
@@ -135,8 +138,8 @@ export default function DiplomacyPage() {
               <li>
                 The treasury pays <span className={cx('font-bold', resources.gold < data.warCost ? 'text-vermilion-bright' : 'text-gold-bright')}>{fmt(data.warCost)} gold</span> (you have {fmt(resources.gold)}).
               </li>
-              {myProtection ? <li>Your protection under the shogunate&apos;s truce ends immediately.</li> : null}
-              <li>The war lasts until both sides agree to peace or one clan falls.</li>
+              {myProtection ? <li>Your protection under the founding truce ends immediately.</li> : null}
+              <li>The war lasts until both sides agree to peace or one nation falls.</li>
             </ul>
           </>
         ) : null}
@@ -156,7 +159,7 @@ function ClanIdentity({ clan }: { clan: ClanPublicDTO }) {
         </div>
         <div className="truncate text-sm text-parchment/80">{clan.daimyoName}</div>
         <div className="num truncate text-xs text-muted">
-          {clan.isNpc ? 'Rival daimyo' : (clan.playerNickname ?? 'Player')} · {clan.provinceCount} {clan.provinceCount === 1 ? 'province' : 'provinces'} · {fmt(clan.score)} renown
+          {clan.isNpc ? 'Rival government' : `[${clan.tag}] · ${clan.memberCount} ${clan.memberCount === 1 ? 'official' : 'officials'}`} · {clan.provinceCount} {clan.provinceCount === 1 ? 'province' : 'provinces'} · {fmt(clan.score)} renown
         </div>
       </div>
     </div>
@@ -166,6 +169,7 @@ function ClanIdentity({ clan }: { clan: ClanPublicDTO }) {
 function ClanRow({
   entry,
   busy,
+  blocked,
   warCost,
   now,
   onDeclare,
@@ -174,6 +178,8 @@ function ClanRow({
 }: {
   entry: DiplomacyClanDTO;
   busy: boolean;
+  /** Why the viewer's role may not act in diplomacy, or null. */
+  blocked: string | null;
   warCost: number;
   now: number;
   onDeclare: () => void;
@@ -198,22 +204,22 @@ function ClanRow({
           pendingPeace === 'incoming' ? (
             <>
               <span className="w-full text-right text-sm text-gold-bright sm:w-auto sm:self-center">They offer peace.</span>
-              <ActionButton variant="gold" size="sm" busy={busy} onClick={() => onRespond(true)}>
+              <ActionButton variant="gold" size="sm" busy={busy} reason={blocked} onClick={() => onRespond(true)}>
                 Accept peace
               </ActionButton>
-              <ActionButton size="sm" busy={busy} onClick={() => onRespond(false)}>
+              <button type="button" className="btn btn-sm" disabled={busy || !!blocked} onClick={() => onRespond(false)}>
                 Refuse
-              </ActionButton>
+              </button>
             </>
           ) : pendingPeace === 'outgoing' ? (
             <span className="self-center text-sm text-muted">Your envoy awaits their answer…</span>
           ) : (
-            <ActionButton size="sm" busy={busy} onClick={onPropose}>
+            <ActionButton size="sm" busy={busy} reason={blocked} onClick={onPropose}>
               Offer peace
             </ActionButton>
           )
         ) : clan.status === 'fallen' ? null : (
-          <ActionButton variant="primary" size="sm" reason={entry.canDeclareWar ? null : (entry.declareBlockedReason ?? 'War cannot be declared now')} busy={busy} onClick={onDeclare} wrapperClassName="max-w-[14rem]">
+          <ActionButton variant="primary" size="sm" reason={blocked ?? (entry.canDeclareWar ? null : (entry.declareBlockedReason ?? 'War cannot be declared now'))} busy={busy} onClick={onDeclare} wrapperClassName="max-w-[14rem]">
             Declare war · {fmt(warCost)}
           </ActionButton>
         )}

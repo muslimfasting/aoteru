@@ -284,6 +284,82 @@ const PATHS = {
   ),
   expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   dot: <circle cx="12" cy="12" r="3" />,
+  /** A banner on its pole: the nation. */
+  clan: (
+    <>
+      <path d="M6 21V3" />
+      <path d="M6 4h12l-3 4.5 3 4.5H6" />
+    </>
+  ),
+  /** Two figures: members. */
+  members: (
+    <>
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3 19.5a6 6 0 0 1 12 0" />
+      <path d="M15.5 5.8a3 3 0 0 1 0 5.6" />
+      <path d="M17.5 14.2a6 6 0 0 1 3.5 5.3" />
+    </>
+  ),
+  /** A strongbox: the shared treasury. */
+  treasury: (
+    <>
+      <path d="M4 11V8.5A3.5 3.5 0 0 1 7.5 5h9A3.5 3.5 0 0 1 20 8.5V11" />
+      <rect x="3" y="11" width="18" height="8.5" rx="1" />
+      <path d="M10.5 11v3.5h3V11" />
+    </>
+  ),
+  /** A drawstring pouch: the personal purse. */
+  purse: (
+    <>
+      <path d="M9 7.5C6 10 4.5 13 4.5 16a4 4 0 0 0 4 4h7a4 4 0 0 0 4-4c0-3-1.5-6-4.5-8.5" />
+      <path d="M8.5 7.5h7" />
+      <path d="M9.5 7.5L8 4h8l-1.5 3.5" />
+    </>
+  ),
+  /** A house: the residence. */
+  home: (
+    <>
+      <path d="M3.5 11.5L12 4l8.5 7.5" />
+      <path d="M6 10v9.5h12V10" />
+      <path d="M10 19.5v-5h4v5" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l5 5" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  send: <path d="M4 12l16-7-6 15-2.5-6z" />,
+  /** A sealed letter: private messages. */
+  mail: (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="1" />
+      <path d="M4 7l8 6.5L20 7" />
+    </>
+  ),
+  /** A horn: announcements. */
+  announce: (
+    <>
+      <path d="M4 10v4h3l8 4V6l-8 4z" />
+      <path d="M18 9.5a4 4 0 0 1 0 5" />
+    </>
+  ),
+  /** An open gate with an arrow: leaving. */
+  leave: (
+    <>
+      <path d="M13 4h6v16h-6" />
+      <path d="M4 12h10" />
+      <path d="M10 8l4 4-4 4" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="8" cy="12" r="3.5" />
+      <path d="M11.5 12H20M17 12v3.5M20 12v2.5" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
@@ -421,5 +497,6 @@ const CODE_ICON: Record<string, IconName> = {
 
 /** Pictogram for a section or status code. Unknown codes (province names) get the map pin. */
 export function Glyph({ k, ...rest }: { k: string } & Omit<Parameters<typeof Icon>[0], 'name'>) {
-  return <Icon name={CODE_ICON[k] ?? 'province'} {...rest} />;
+  const direct = (PATHS as Record<string, ReactNode>)[k] ? (k as IconName) : undefined;
+  return <Icon name={direct ?? CODE_ICON[k] ?? 'province'} {...rest} />;
 }

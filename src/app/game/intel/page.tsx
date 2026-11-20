@@ -23,7 +23,7 @@ export default function IntelPage() {
   const pending = ops.data?.operations.filter((o) => o.status === 'pending') ?? [];
   const reports = ops.data?.operations.filter((o) => o.status === 'success' && o.report && !o.reportExpired) ?? [];
   const past = ops.data?.operations.filter((o) => o.status === 'failed' || (o.status === 'success' && (o.reportExpired || !o.report))) ?? [];
-  // Scouts work from the clan's own borders: provinces next to land you hold come first, the rest are out of reach.
+  // Scouts work from the nation's own borders: provinces next to land you hold come first, the rest are out of reach.
   const ownCodes = new Set(map.data?.provinces.filter((p) => p.relation === 'own').map((p) => p.code) ?? []);
   const inReach = (p: ProvinceSummaryDTO) => (PROVINCE_BY_CODE[p.code]?.neighbors ?? []).some((code) => ownCodes.has(code));
   const targets = (map.data?.provinces.filter((p) => p.relation !== 'own') ?? []).sort((a, b) => Number(inReach(b)) - Number(inReach(a)));
@@ -149,7 +149,7 @@ export default function IntelPage() {
 
 function ScoutDialog({ province, onClose, onSent }: { province: ProvinceSummaryDTO; onClose: () => void; onSent: (res: EspionageResponse) => void }) {
   const detail = useApi<ProvinceDetailResponse>(`/api/provinces/${province.id}`);
-  const { resources } = useGame();
+  const { resources, lacks } = useGame();
   const action = useAction();
   const actions = detail.data?.actions;
 
@@ -161,7 +161,7 @@ function ScoutDialog({ province, onClose, onSent }: { province: ProvinceSummaryD
   };
 
   const lacksGold = actions ? resources.gold < actions.scoutCost : false;
-  const blocked = actions ? (actions.scoutBlockedReason ?? (lacksGold ? 'Not enough gold' : null)) : null;
+  const blocked = lacks('espionage') ?? (actions ? (actions.scoutBlockedReason ?? (lacksGold ? 'Not enough gold' : null)) : null);
 
   return (
     <ConfirmDialog open onClose={onClose} onConfirm={send} busy={action.busy || !actions} blockedReason={blocked} title={`Scout ${province.name}`} kanji="忍" confirmLabel={actions ? `Send scout · ${fmt(actions.scoutCost)} gold` : 'Send scout'}>

@@ -45,12 +45,16 @@ export const EVENTS = {
   map: ['world:province_updated', 'army:updated', 'battle:started', 'battle:completed', 'world:event', 'diplomacy:updated'],
   army: ['army:updated', 'recruitment:completed', 'battle:started', 'battle:completed', 'world:province_updated'],
   province: ['building:completed', 'recruitment:completed', 'world:province_updated', 'army:updated', 'battle:completed', 'world:tick', 'espionage:completed'],
-  me: ['resource:updated', 'world:province_updated', 'army:updated', 'recruitment:completed', 'building:completed', 'battle:completed', 'world:tick'],
+  me: ['resource:updated', 'world:province_updated', 'army:updated', 'recruitment:completed', 'building:completed', 'battle:completed', 'world:tick', 'clan:updated'],
   battles: ['battle:started', 'battle:completed'],
   pillars: ['pillars:updated'],
   diplomacy: ['diplomacy:proposal', 'diplomacy:updated', 'world:province_updated'],
   intel: ['espionage:completed'],
   notifications: ['notification:new'],
   chat: ['chat:message'],
+  /** The viewer's own nation: members, treasury, applications, history. */
+  clan: ['clan:updated', 'resource:updated', 'world:province_updated', 'pillars:updated'],
+  /** The list of nations and the viewer's invitations and applications. */
+  directory: ['clan:directory', 'clan:updated', 'world:province_updated'],
   ranking: ['world:province_updated', 'world:tick'],
 } as const satisfies Record<string, readonly BusEvent[]>;

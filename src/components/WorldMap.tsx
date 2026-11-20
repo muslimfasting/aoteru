@@ -697,12 +697,12 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
               <div className="paper mb-1.5 animate-rise space-y-1.5 p-3 text-[0.78rem] leading-snug">
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-[#c9a544] bg-[#9b2d30]/60" />} label="Your land (gold border)" />
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-dashed border-[#c94a48] bg-[#31487a]/60" />} label="At war with you" />
-                <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-ink-900 bg-[#31487a]/60" />} label="Another clan" />
+                <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-ink-900 bg-[#31487a]/60" />} label="Another nation" />
                 <LegendRow
                   swatch={<span className="block h-3.5 w-5 border-2 border-ink-900" style={{ background: 'repeating-linear-gradient(128deg,#e6d9ba 0 3px,#c9bb98 3px 5px)' }} />}
                   label="Unclaimed, held by local warriors"
                 />
-                <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">＋</span>} label="Open for a new clan" />
+                <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">＋</span>} label="Open for a new nation" />
                 <LegendRow swatch={<span className="text-vermilion"><Icon name="military" /></span>} label="Battle in progress" />
                 <LegendRow swatch={<Icon name="army" />} label="Your garrison" />
               </div>

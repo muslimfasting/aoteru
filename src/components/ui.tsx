@@ -5,7 +5,7 @@ import { RESOURCE_INFO, RESOURCE_KEYS, UNITS, UNIT_TYPES, type ResourceBag, type
 import { useNow } from '@/lib/clock';
 import { cx, fmt, fmtClock, fmtDuration } from '@/lib/format';
 
-import { Glyph, Icon } from '@/components/icons';
+import { Glyph, Icon, type IconName } from '@/components/icons';
 // ---------------------------------------------------------------------------
 // Layout primitives
 // ---------------------------------------------------------------------------
@@ -13,13 +13,16 @@ import { Glyph, Icon } from '@/components/icons';
 export function Panel({
   title,
   kanji,
+  icon,
   action,
   children,
   className,
   bodyClassName,
 }: {
   title?: React.ReactNode;
+  /** Legacy section code; prefer `icon`. */
   kanji?: string;
+  icon?: IconName;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -29,9 +32,9 @@ export function Panel({
     <section className={cx('panel', className)}>
       {title ? (
         <header className="flex items-center gap-3 border-b border-gold/15 px-4 py-3">
-          {kanji ? (
+          {icon ?? kanji ? (
             <span className="seal seal-sm seal-ink" aria-hidden>
-              <Glyph k={kanji} />
+              <Glyph k={(icon ?? kanji)!} />
             </span>
           ) : null}
           <h2 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold tracking-wide text-parchment">{title}</h2>
@@ -45,11 +48,13 @@ export function Panel({
 
 export function PageHeader({
   kanji,
+  icon,
   title,
   subtitle,
   action,
 }: {
-  kanji: string;
+  kanji?: string;
+  icon?: IconName;
   title: string;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
@@ -57,7 +62,7 @@ export function PageHeader({
   return (
     <header className="mb-4 flex items-center gap-3 lg:mb-5">
       <span className="seal seal-lg hidden sm:inline-grid" aria-hidden>
-        <Glyph k={kanji} />
+        <Glyph k={icon ?? kanji ?? 'province'} />
       </span>
       <div className="min-w-0 flex-1">
         <h1 className="font-display text-2xl font-extrabold leading-tight tracking-wide text-parchment lg:text-[1.75rem]">{title}</h1>
@@ -141,10 +146,22 @@ export function ErrorState({ message, onRetry, className }: { message: string; o
   );
 }
 
-export function EmptyState({ kanji = '無', title, children, className }: { kanji?: string; title: string; children?: React.ReactNode; className?: string }) {
+export function EmptyState({
+  kanji = '無',
+  icon,
+  title,
+  children,
+  className,
+}: {
+  kanji?: string;
+  icon?: IconName;
+  title: string;
+  children?: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={cx('flex flex-col items-center justify-center gap-2 py-8 text-center', className)}>
-      <Seal tone="ink"><Glyph k={kanji} /></Seal>
+      <Seal tone="ink"><Glyph k={icon ?? kanji} /></Seal>
       <p className="font-display text-base font-bold text-parchment">{title}</p>
       {children ? <div className="max-w-sm text-sm text-muted">{children}</div> : null}
     </div>
@@ -182,15 +199,17 @@ export function ActionButton({
   size,
   className,
   wrapperClassName,
+  disabled: plainDisabled,
   ...rest
-}: Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'disabled'> & {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   reason?: string | null;
   busy?: boolean;
   variant?: 'default' | 'primary' | 'gold' | 'ghost' | 'ink';
   size?: 'sm';
   wrapperClassName?: string;
 }) {
-  const disabled = Boolean(reason) || busy;
+  // `disabled` alone greys the button out without an explanation (e.g. an empty form).
+  const disabled = Boolean(reason) || busy || plainDisabled;
   return (
     <span className={cx('inline-flex flex-col items-stretch gap-1', wrapperClassName)}>
       <button
@@ -225,6 +244,7 @@ export function Dialog({
   onClose,
   title,
   kanji,
+  icon,
   children,
   footer,
   wide,
@@ -233,6 +253,7 @@ export function Dialog({
   onClose: () => void;
   title: string;
   kanji?: string;
+  icon?: IconName;
   children: React.ReactNode;
   footer?: React.ReactNode;
   wide?: boolean;
@@ -272,7 +293,7 @@ export function Dialog({
         style={{ background: 'linear-gradient(180deg,#2a241b,#191510)' }}
       >
         <header className="flex items-center gap-3 border-b border-gold/20 px-4 py-3">
-          {kanji ? <Seal size="sm"><Glyph k={kanji} /></Seal> : null}
+          {icon ?? kanji ? <Seal size="sm"><Glyph k={(icon ?? kanji)!} /></Seal> : null}
           <h2 id={titleId} className="min-w-0 flex-1 truncate font-display text-lg font-bold">
             {title}
           </h2>
@@ -297,6 +318,7 @@ export function ConfirmDialog({
   onConfirm,
   title,
   kanji,
+  icon,
   children,
   confirmLabel,
   busy,
@@ -308,6 +330,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   title: string;
   kanji?: string;
+  icon?: IconName;
   children: React.ReactNode;
   confirmLabel: string;
   busy?: boolean;
@@ -321,6 +344,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       kanji={kanji}
+      icon={icon}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
@@ -431,7 +455,7 @@ export function TimedProgress({ from, to, onDone, label }: { from: string; to: s
 // Game-specific fragments
 // ---------------------------------------------------------------------------
 
-/** Cost as a row of resource chips; amounts the clan cannot pay are shown in red. */
+/** Cost as a row of resource chips; amounts the nation cannot pay are shown in red. */
 export function CostRow({ cost, have, className }: { cost: Partial<ResourceBag>; have?: ResourceBag | null; className?: string }) {
   const keys = RESOURCE_KEYS.filter((k) => (cost[k] ?? 0) > 0);
   if (keys.length === 0) return <span className={cx('text-xs text-muted', className)}>Free</span>;

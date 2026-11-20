@@ -14,7 +14,7 @@ import { apiPost } from '@/lib/api';
 import { EVENTS } from '@/lib/events';
 import { cx, fmt, fmtDuration, fmtPct } from '@/lib/format';
 import { useAction, useApi } from '@/lib/hooks';
-import { useGame } from '@/lib/game-context';
+import { useSession } from '@/lib/game-context';
 import { useNow } from '@/lib/clock';
 import { MonBadge, NeutralBadge } from './Banner';
 import { ActionButton, Bar, ConfirmDialog, Countdown, ErrorState, LoadingState, TimedProgress, UnitsRow } from './ui';
@@ -29,7 +29,7 @@ export function relationChip(relation: string): { label: string; cls: string } {
     case 'unclaimed':
       return { label: 'Unclaimed', cls: 'chip chip-muted' };
     default:
-      return { label: 'Another clan', cls: 'chip chip-muted' };
+      return { label: 'Another nation', cls: 'chip chip-muted' };
   }
 }
 
@@ -46,7 +46,7 @@ export function ProvincePanel({
   onMarch: (opts: { sourceId?: string; targetId?: string }) => void;
 }) {
   const state = useApi<ProvinceDetailResponse>(`/api/provinces/${provinceId}`, EVENTS.province);
-  const { resources } = useGame();
+  const { resources, lacks, clan } = useSession();
   const now = useNow();
   const scout = useAction();
   const [scoutOpen, setScoutOpen] = useState(false);
@@ -97,15 +97,15 @@ export function ProvincePanel({
         <div className="flex items-center gap-3">
           {owner ? <MonBadge color={owner.banner.color} mon={owner.banner.mon} size={36} /> : <NeutralBadge size={36} />}
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate font-display font-bold">{owner ? `${owner.name} clan` : 'No clan rules here'}</div>
+            <div className="truncate font-display font-bold">{owner ? owner.name : 'No nation rules here'}</div>
             <div className="truncate text-xs text-muted">
-              {owner ? `${owner.daimyoName}${owner.isNpc ? ' · rival daimyo' : owner.playerNickname ? ` · ${owner.playerNickname}` : ''}` : 'Held by local warriors'}
+              {owner ? (owner.isNpc ? `${owner.daimyoName} · rival government` : `[${owner.tag}] · led by ${owner.playerNickname ?? owner.daimyoName}`) : 'Held by local warriors'}
             </div>
           </div>
         </div>
         {protectedUntil ? (
           <p className="panel-flat px-3 py-2 text-xs text-muted">
-            This clan is under the shogunate&apos;s truce for another <Countdown to={protectedUntil} className="font-bold text-gold-bright" done="a moment" /> and cannot be attacked.
+            This nation is under the founding truce for another <Countdown to={protectedUntil} className="font-bold text-gold-bright" done="a moment" /> and cannot be attacked.
           </p>
         ) : null}
 
@@ -172,7 +172,7 @@ export function ProvincePanel({
               <Link href={`/game/military?province=${p.id}`} className="btn">
                 Recruit
               </Link>
-              <ActionButton onClick={() => onMarch({ sourceId: p.id })} reason={totalUnits(own.garrison) === 0 ? 'No soldiers here' : null}>
+              <ActionButton onClick={() => onMarch({ sourceId: p.id })} reason={lacks('command') ?? (totalUnits(own.garrison) === 0 ? 'No soldiers here' : null)}>
                 Send army
               </ActionButton>
             </div>
@@ -205,14 +205,30 @@ export function ProvincePanel({
             </section>
 
             <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
-              <ActionButton variant="primary" reason={actions.attackBlockedReason} onClick={() => onMarch({ targetId: p.id })}>
-                Attack
-              </ActionButton>
-              <ActionButton reason={actions.scoutBlockedReason} onClick={() => setScoutOpen(true)}>
-                Scout · {fmt(actions.scoutCost)} gold
-              </ActionButton>
+              {clan ? (
+                <>
+                  <ActionButton variant="primary" reason={lacks('command') ?? actions.attackBlockedReason} onClick={() => onMarch({ targetId: p.id })}>
+                    Attack
+                  </ActionButton>
+                  <ActionButton reason={lacks('espionage') ?? actions.scoutBlockedReason} onClick={() => setScoutOpen(true)}>
+                    Scout · {fmt(actions.scoutCost)} gold
+                  </ActionButton>
+                </>
+              ) : (
+                <>
+                  {actions.canFound ? (
+                    <Link href="/found" className="btn btn-primary">
+                      Found a nation here
+                    </Link>
+                  ) : null}
+                  <Link href="/game/clans" className="btn btn-gold">
+                    Find a nation
+                  </Link>
+                </>
+              )}
             </div>
-            {owner && p.relation === 'foreign' ? (
+            {!clan ? <p className="text-xs text-muted">Armies and scouts are sent by nations. Join one, or found your own, to act on the map.</p> : null}
+            {clan && owner && p.relation === 'foreign' ? (
               <p className="text-xs text-muted">
                 You are at peace with the {owner.name}.{' '}
                 <Link href="/game/diplomacy" className="tap-link text-gold">
@@ -257,7 +273,7 @@ export function ProvincePanel({
           A scout will cross into {p.name} and count its defenders, walls and stores. The report stays useful for a limited time.
         </p>
         <dl className="grid grid-cols-3 gap-2 text-center">
-          <Fact label="Cost" value={`${fmt(actions.scoutCost)}`} hint="gold" warn={resources.gold < actions.scoutCost} />
+          <Fact label="Cost" value={`${fmt(actions.scoutCost)}`} hint="gold" warn={!!resources && resources.gold < actions.scoutCost} />
           <Fact label="Success" value={fmtPct(actions.scoutChance)} />
           <Fact label="Returns in" value={fmtDuration(actions.scoutDurationMs)} />
         </dl>

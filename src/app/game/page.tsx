@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { ClanSelfDTO, WorldEventDTO, WorldMapResponse, WorldMetaDTO } from '@/game/api';
+import type { ClanHubResponse, ClanSelfDTO, WorldEventDTO, WorldMapResponse, WorldMetaDTO } from '@/game/api';
 import { RESOURCE_INFO, RESOURCE_KEYS, totalUnits } from '@/game/config';
 import { Banner } from '@/components/Banner';
 import { Portrait } from '@/components/Portrait';
@@ -15,8 +15,10 @@ import { gameDateText } from '@/lib/world';
 
 import { Glyph, Icon } from '@/components/icons';
 export default function OverviewPage() {
-  const { clan, world, resources } = useGame();
+  const { clan, world, resources, player, membership } = useGame();
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
+  const hub = useApi<ClanHubResponse>('/api/clan', ['clan:updated']);
+  const announcement = hub.data?.announcement ?? null;
   const now = useNow();
 
   const protectedUntil = clan.protectedUntil && Date.parse(clan.protectedUntil) > now ? clan.protectedUntil : null;
@@ -33,23 +35,35 @@ export default function OverviewPage() {
       {/* masthead */}
       <section className="paper overflow-hidden">
         <div className="flex items-center gap-4 p-4 sm:p-5">
-          <Portrait id={clan.portrait} accent={clan.banner.color} size={84} className="h-[68px] w-[68px] shrink-0 sm:h-[84px] sm:w-[84px]" title={`Portrait of ${clan.daimyoName}`} />
+          <Portrait id={player.portrait} accent={clan.banner.color} size={84} className="h-[68px] w-[68px] shrink-0 sm:h-[84px] sm:w-[84px]" title={`Portrait of ${player.nickname}`} />
           <div className="min-w-0 flex-1">
             <p className="text-[0.7rem] uppercase tracking-[0.18em] text-ink-600">
               Day {world.day} · hour of the {hourName(world.hour)}
             </p>
-            <h1 className="break-words font-display text-[1.45rem] font-extrabold leading-tight sm:text-3xl">{clan.daimyoName}</h1>
+            <h1 className="break-words font-display text-[1.45rem] font-extrabold leading-tight sm:text-3xl">
+              {clan.name} <span className="num text-[0.6em] font-bold tracking-wider text-vermilion-deep">[{clan.tag}]</span>
+            </h1>
             <p className="font-display text-base">
-              Daimyo of the <strong>{clan.name}</strong> clan
+              <strong>{player.nickname}</strong>, {membership.roleName}
               {isHegemon ? <span className="ml-2 chip chip-red">Hegemon of Kansai</span> : null}
             </p>
             <p className="mt-1 text-sm text-ink-700">
-              Rank {clan.rank} in the realm · {fmt(clan.score)} renown
+              Rank {clan.rank} in the realm · {fmt(clan.score)} renown · {clan.memberCount} {clan.memberCount === 1 ? 'official' : 'officials'}
+              {membership.role !== 'leader' && clan.playerNickname ? ` · led by ${clan.playerNickname}` : ''}
             </p>
           </div>
-          <Banner color={clan.banner.color} mon={clan.banner.mon} size={92} className="hidden shrink-0 min-[420px]:block" title={`Banner of the ${clan.name} clan`} />
+          <Banner color={clan.banner.color} mon={clan.banner.mon} size={92} className="hidden shrink-0 min-[420px]:block" title={`Flag of ${clan.name}`} />
         </div>
       </section>
+
+      {announcement ? (
+        <Alert tone="gold" kanji="announce">
+          <strong>{announcement.by ? `${announcement.by} to the nation:` : 'To the nation:'}</strong> <span className="whitespace-pre-wrap break-words">{announcement.body}</span>{' '}
+          <Link href="/game/clan" className="tap-link">
+            Open the government
+          </Link>
+        </Alert>
+      ) : null}
 
       {/* alerts */}
       {besieged.length > 0 || incoming.length > 0 || protectedUntil || clan.starving ? (
@@ -74,8 +88,8 @@ export default function OverviewPage() {
           ) : null}
           {protectedUntil ? (
             <Alert tone="gold" kanji="護">
-              <strong>Under the shogunate&apos;s truce</strong> for another <Countdown to={protectedUntil} className="font-bold text-gold-bright" done="a moment" />. No clan may attack you while it lasts; it ends early if you
-              attack another clan.
+              <strong>Under the founding truce</strong> for another <Countdown to={protectedUntil} className="font-bold text-gold-bright" done="a moment" />. No nation may attack you while it lasts; it ends early if you
+              attack another nation.
             </Alert>
           ) : null}
         </div>
@@ -132,7 +146,7 @@ export default function OverviewPage() {
             <p className="mt-2 text-xs leading-relaxed text-muted">
               {isHegemon
                 ? 'You are proclaimed hegemon of Kansai. Every rival now has reason to bring you down.'
-                : `Hold ${world.hegemonyProvinces} of the ten home provinces to be proclaimed hegemon of Kansai — the first step toward the title of Shogun.`}
+                : `Hold ${world.hegemonyProvinces} of the ten home provinces to be proclaimed hegemon of Kansai — the first step toward reunifying Japan.`}
             </p>
           </div>
         </Panel>
@@ -272,9 +286,9 @@ function Counsel({ clan, world, ownCount, hasUnclaimedNeighbour }: { clan: ClanS
   if (ownCount <= 1 && hasUnclaimedNeighbour) {
     advice.push({ kanji: '攻', text: 'An unclaimed neighbour is held only by local warriors. Scout it, then march — a second province doubles our strength.', href: '/game/map', cta: 'Map' });
   }
-  advice.push({ kanji: '柱', text: 'Every deed sharpens one of the Five Pillars. Spend skill points as they come — a lord who specialises outgrows one who does not.', href: '/game/pillars', cta: 'Pillars' });
+  advice.push({ kanji: '柱', text: 'Every deed sharpens one of the Five Pillars. Spend skill points as they come — an official who specialises outgrows one who does not.', href: '/game/pillars', cta: 'Pillars' });
   if (clan.provinceCount < world.hegemonyProvinces && ownCount > 1) {
-    advice.push({ kanji: '交', text: 'To take land from another clan, war must first be declared. Weigh their strength and their friends before you do.', href: '/game/diplomacy', cta: 'Diplomacy' });
+    advice.push({ kanji: '交', text: 'To take land from another nation, war must first be declared. Weigh their strength and their friends before you do.', href: '/game/diplomacy', cta: 'Diplomacy' });
   }
   return (
     <Panel title="Counsel of your retainers" kanji="議">

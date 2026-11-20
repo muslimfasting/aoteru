@@ -1,15 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import type { PillarDTO, PillarsResponse, SkillStateDTO } from '@/game/api';
+import { useEffect, useState } from 'react';
+import type { MeResponse, PillarDTO, PillarsResponse, SkillStateDTO } from '@/game/api';
+import { RESOURCE_INFO, RESOURCE_KEYS } from '@/game/config';
 import { BRANCH_NAMES, MAX_PILLAR_LEVEL, PILLARS, PILLAR_DEFS, SKILLS, SKILL_BY_CODE, type ModifierKey, type Modifiers, type PillarId, type SkillDef } from '@/game/pillars';
-import { ActionButton, Bar, ErrorState, LoadingState, PageHeader, Panel } from '@/components/ui';
+import { PlayerLink } from '@/components/clan';
+import { ActionButton, Bar, CostRow, ErrorState, LoadingState, PageHeader, Panel } from '@/components/ui';
 import { apiPost } from '@/lib/api';
 import { EVENTS } from '@/lib/events';
-import { cx, fmt } from '@/lib/format';
+import { cx, fmt, missingResources } from '@/lib/format';
+import { useSession } from '@/lib/game-context';
 import { useAction, useApi } from '@/lib/hooks';
 
 import { Glyph, Icon } from '@/components/icons';
+import Link from 'next/link';
 const MOD_LABELS: Record<ModifierKey, { label: string; kind: 'pct' | 'flat'; sign?: -1 }> = {
   attack: { label: 'Army attack', kind: 'pct' },
   toughness: { label: 'Army toughness', kind: 'pct' },
@@ -54,7 +58,7 @@ function modText(key: ModifierKey, value: number): string {
 }
 
 export default function PillarsPage() {
-  const state = useApi<PillarsResponse>('/api/pillars/me', EVENTS.pillars);
+  const state = useApi<PillarsResponse>('/api/pillars/me', [...EVENTS.pillars, 'clan:updated']);
   const [selected, setSelected] = useState<PillarId>('military');
   const action = useAction();
 
@@ -85,7 +89,7 @@ export default function PillarsPage() {
       <PageHeader
         kanji="柱"
         title="The Five Pillars"
-        subtitle="What your Daimyo does, your Daimyo becomes. Each level grants a skill point for that pillar."
+        subtitle="These are yours alone and go with you from nation to nation. Each level grants a skill point for that pillar."
         action={totalPoints > 0 ? <span className="chip shrink-0">{totalPoints} to spend</span> : undefined}
       />
 
@@ -190,15 +194,178 @@ export default function PillarsPage() {
                     </FragmentWithOr>
                   ))}
                 </ul>
-                <p className="mt-2 text-center text-xs text-muted">Learning one path closes the other for good. Specialization is what sets one Daimyo apart from another.</p>
+                <p className="mt-2 text-center text-xs text-muted">Learning one path closes the other for good. Specialization is what sets one player apart from another — and what a nation needs from its cabinet.</p>
               </div>
             ) : null}
           </Panel>
         </div>
 
-        <ModifierSummary modifiers={data.modifiers} />
+        <div className="space-y-4 lg:space-y-5">
+          <Council council={data.council} />
+          <Residence />
+          {data.council ? (
+            <ModifierSummary
+              title="In force for your nation"
+              modifiers={data.council.modifiers}
+              empty="The cabinet grants no bonuses yet. They come from the pillar levels and skills of the officials who carry each pillar."
+              note="What the nation actually builds, fights and scouts with: the sum of what each cabinet seat carries."
+            />
+          ) : null}
+          <ModifierSummary
+            title="Your own pillars"
+            modifiers={data.modifiers}
+            empty="No bonuses yet. Every pillar level and every skill rank adds to this list."
+            note={
+              data.council
+                ? 'These count for the nation where you carry the pillar: by holding its seat, or — for Military — whenever you lead an army.'
+                : 'They start to count once you belong to a nation and carry a pillar for it.'
+            }
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+/** The cabinet: who carries each pillar for the viewer's nation. */
+function Council({ council }: { council: PillarsResponse['council'] }) {
+  if (!council) {
+    return (
+      <Panel title="Cabinet" icon="clan" className="self-start">
+        <p className="text-sm text-muted">
+          You serve no nation yet. In a nation, each pillar is carried for everyone by one official — the right cabinet seat lets a specialist put their pillar to work for the whole nation.
+        </p>
+        <Link href="/game/clans" className="btn btn-sm btn-gold mt-3">
+          Find a nation
+        </Link>
+      </Panel>
+    );
+  }
+  return (
+    <Panel title="Cabinet" icon="clan" className="self-start" bodyClassName="p-0">
+      <p className="px-4 pt-3 text-sm text-muted">Each pillar of your nation is carried by one official: the stronger of the head of government and whoever holds its seat in the cabinet.</p>
+      <ul className="mt-2 divide-y divide-gold/10">
+        {council.seats.map((s) => (
+          <li key={s.pillar} className={cx('flex items-center gap-3 px-4 py-2.5', s.isYou && 'bg-gold/10')}>
+            <span className={cx('seal seal-sm', !s.isYou && 'seal-ink')} aria-hidden>
+              <Icon name={s.pillar} />
+            </span>
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="truncate font-display font-bold">{PILLAR_DEFS[s.pillar].name}</div>
+              <div className="truncate text-xs text-muted">Seat: {s.seatName}</div>
+            </div>
+            <div className="text-right leading-tight">
+              <PlayerLink id={s.isYou ? null : s.playerId} className="block max-w-[8rem] truncate text-sm font-bold">
+                {s.isYou ? 'You' : (s.nickname ?? 'nobody')}
+              </PlayerLink>
+              <span className="num text-xs text-gold">Lv {s.level}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** The player's residence: personal income and the pillar trained at home. */
+function Residence() {
+  const { personal, purse, clan, refreshMe } = useSession();
+  const action = useAction();
+  const cost = personal.nextResidenceCost;
+  const missing = missingResources(purse, cost);
+  const reason = !cost ? null : missing.length ? `Your purse lacks ${missing.map((k) => RESOURCE_INFO[k].name.toLowerCase()).join(', ')}` : null;
+
+  // Arriving from the purse button: bring the card into view.
+  useEffect(() => {
+    if (window.location.hash === '#residence') document.getElementById('residence')?.scrollIntoView({ block: 'start' });
+  }, []);
+
+  const upgrade = () =>
+    void action.run(() => apiPost<MeResponse>('/api/player/residence'), { success: `Your residence rises to level ${personal.residenceLevel + 1}.` }).then((res) => (res ? refreshMe() : undefined));
+  const train = (pillar: PillarId) => {
+    if (pillar === personal.trainingFocus) return;
+    void action
+      .run(() => apiPost<MeResponse>('/api/player/profile', { trainingFocus: pillar }), { success: `You now train ${PILLAR_DEFS[pillar].name} at home.` })
+      .then((res) => (res ? refreshMe() : undefined));
+  };
+
+  return (
+    <section id="residence" className="panel scroll-mt-40 self-start">
+      <header className="flex items-center gap-3 border-b border-gold/15 px-4 py-3">
+        <span className="seal seal-sm seal-ink" aria-hidden>
+          <Icon name="home" />
+        </span>
+        <h2 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold tracking-wide">Your residence</h2>
+        <span className="chip shrink-0">
+          Level {personal.residenceLevel} / {personal.maxResidenceLevel}
+        </span>
+      </header>
+      <div className="p-4">
+        <p className="text-sm text-muted">Your own household. It fills your purse every game hour and is where you train.</p>
+
+        <div className="heading-rule mb-2 mt-3">Income per game hour</div>
+        <ul className="grid grid-cols-5 gap-1.5">
+          {RESOURCE_KEYS.map((k) => (
+            <li key={k} className="panel-flat flex flex-col items-center py-1.5" title={RESOURCE_INFO[k].name}>
+              <span className="text-gold" aria-hidden>
+                <Icon name={k} />
+              </span>
+              <span className="sr-only">{RESOURCE_INFO[k].name}</span>
+              <span className={cx('num text-sm font-bold', !personal.incomeActive && 'text-faint')}>+{fmt(personal.residenceIncome[k])}</span>
+            </li>
+          ))}
+        </ul>
+        <p className={cx('mt-1.5 text-xs', personal.incomeActive ? 'text-jade' : 'text-vermilion-bright')}>
+          {personal.incomeActive ? 'Being paid into your purse.' : clan ? 'Not being paid: your nation holds no land.' : 'Not being paid: it starts when you belong to a nation that holds land.'}
+        </p>
+
+        <div className="mt-3 border-t border-gold/15 pt-3">
+          {cost ? (
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-wider text-muted">Raise to level {personal.residenceLevel + 1}</div>
+                <CostRow cost={cost} have={purse} className="mt-1" />
+                <div className="mt-0.5 text-[0.7rem] text-muted">paid from your own purse</div>
+              </div>
+              <ActionButton variant="gold" size="sm" busy={action.busy} reason={reason} onClick={upgrade} wrapperClassName="max-w-[11rem]">
+                Upgrade
+              </ActionButton>
+            </div>
+          ) : (
+            <p className="text-sm text-gold">Your residence is as grand as it can be.</p>
+          )}
+        </div>
+
+        <fieldset className="mt-3 border-t border-gold/15 pt-3">
+          <legend className="sr-only">Training focus</legend>
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <span className="text-xs uppercase tracking-wider text-muted">Train at home</span>
+            <span className="num text-xs text-gold">+{personal.trainingXpPerHour} experience / hour</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Pillar trained at home">
+            {PILLARS.map((id) => {
+              const active = personal.trainingFocus === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={PILLAR_DEFS[id].name}
+                  title={PILLAR_DEFS[id].name}
+                  disabled={action.busy}
+                  onClick={() => train(id)}
+                  className={cx('flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-[3px] border transition-colors', active ? 'border-gold bg-gold/15 text-gold-bright' : 'border-gold/15 text-muted hover:border-gold/50')}
+                >
+                  <Icon name={id} />
+                  <span className="text-[0.58rem] leading-none">{PILLAR_DEFS[id].name.split(' ')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
+    </section>
   );
 }
 
@@ -282,12 +449,13 @@ function SkillCard({
   );
 }
 
-function ModifierSummary({ modifiers }: { modifiers: Modifiers }) {
+function ModifierSummary({ modifiers, title, empty, note }: { modifiers: Modifiers; title: string; empty: string; note: string }) {
   const active = (Object.keys(MOD_LABELS) as ModifierKey[]).filter((k) => Math.abs(modifiers[k] ?? 0) > 1e-9);
   return (
-    <Panel title="What your pillars grant" kanji="効" className="self-start">
+    <Panel title={title} icon="star" className="self-start">
+      <p className="mb-2 text-xs leading-relaxed text-muted">{note}</p>
       {active.length === 0 ? (
-        <p className="text-sm text-muted">No bonuses yet. Every pillar level and every skill rank adds to this list, and the server applies it to your economy, armies and spies.</p>
+        <p className="text-sm text-muted">{empty}</p>
       ) : (
         <dl className="divide-y divide-gold/10">
           {active.map((k) => (

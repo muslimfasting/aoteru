@@ -21,8 +21,8 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await apiPost<AuthResponse>('/api/auth/login', { email: email.trim(), password });
-      router.replace(res.hasClan ? '/game' : '/found');
+      await apiPost<AuthResponse>('/api/auth/login', { email: email.trim(), password });
+      router.replace('/game');
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
@@ -31,11 +31,11 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="Return to your castle"
+      title="Return to your post"
       subtitle="The realm moved on while you were away. See what became of it."
       footer={
         <>
-          No clan yet?{' '}
+          No account yet?{' '}
           <Link href="/register" className="tap-link font-bold text-gold">
             Begin your rise
           </Link>
