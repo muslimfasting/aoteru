@@ -35,7 +35,6 @@ const pts = (list: number[][]) => list.map((p) => p.join(',')).join(' ');
 
 export interface CityViewProps {
   name: string;
-  kanji: string;
   terrain: Terrain;
   levels: BuildingLevels;
   /** Building currently under construction, if any. */
@@ -136,11 +135,11 @@ function Lamp({ x, y }: { x: number; y: number }) {
   );
 }
 
-export function CityView({ name, kanji, terrain, levels, upgrading, bannerHex, hour, className }: CityViewProps) {
+export function CityView({ name, terrain, levels, upgrading, bannerHex, hour, className }: CityViewProps) {
   const night = hour >= 19 || hour < 5;
   const dusk = !night && (hour < 7 || hour >= 17);
   const development = levels.castle + levels.farm + levels.market + levels.barracks + levels.dojo;
-  const id = `city-${kanji}`;
+  const id = `city-${name.replace(/[^a-z0-9]/gi, '')}`;
 
   // ------------------------------------------------------------------ keep
   const tiers = clamp(levels.castle, 1, 5);
@@ -549,13 +548,11 @@ export function CityView({ name, kanji, terrain, levels, upgrading, bannerHex, h
 
           {/* title cartouche and level tags */}
           <g>
-            <rect x={196} y={22} width={40} height={kanji.length > 1 ? 86 : 50} fill={RED} stroke={INK} strokeWidth={1.2} />
-            <rect x={199} y={25} width={34} height={kanji.length > 1 ? 80 : 44} fill="none" stroke={PAPER} strokeWidth={0.8} opacity={0.7} />
-            {Array.from(kanji).slice(0, 2).map((ch, i) => (
-              <text key={i} x={216} y={58 + i * 36} textAnchor="middle" fontSize={30} fontWeight={800} fill={PAPER} className="font-display">
-                {ch}
-              </text>
-            ))}
+            <rect x={196} y={24} width={30 + name.length * 13} height={34} fill={RED} stroke={INK} strokeWidth={1.2} />
+            <rect x={199} y={27} width={24 + name.length * 13} height={28} fill="none" stroke={PAPER} strokeWidth={0.8} opacity={0.7} />
+            <text x={211} y={48} fontSize={19} fontWeight={800} letterSpacing={2.5} fill={PAPER} className="font-display">
+              {name.toUpperCase()}
+            </text>
           </g>
           <Tag x={560} y={clamp(keepTop + 6, 30, 170)} type="castle" level={levels.castle} building={upgrading === 'castle'} />
           <Tag x={300} y={196} type="barracks" level={levels.barracks} building={upgrading === 'barracks'} />

@@ -13,7 +13,7 @@ import { cx, fmt, fmtDuration, fmtPct, timeAgo } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useAction, useApi } from '@/lib/hooks';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 export default function IntelPage() {
   const ops = useApi<EspionageResponse>('/api/espionage', EVENTS.intel);
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
@@ -81,7 +81,7 @@ export default function IntelPage() {
                     {past.map((o) => (
                       <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
                         <span className={cx('seal seal-sm', o.status === 'failed' ? '' : 'seal-ink')} aria-hidden>
-                          {o.status === 'failed' ? '失' : '古'}
+                          <Glyph k={o.status === 'failed' ? '失' : '古'} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="font-display font-bold">{o.targetProvinceName}</span>
@@ -112,7 +112,7 @@ export default function IntelPage() {
                 const owner = map.data!.clans.find((c) => c.id === p.ownerClanId);
                 return (
                   <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="paper grid h-10 w-10 shrink-0 place-items-center font-display text-base font-bold">{p.kanji}</span>
+                    <span className="paper grid h-10 w-10 shrink-0 place-items-center font-display text-base font-bold"><Glyph k={p.kanji} /></span>
                     <span className="min-w-0 flex-1 leading-tight">
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className="font-display font-bold">{p.name}</span>
@@ -205,7 +205,7 @@ function ReportCard({ op, report, onExpire }: { op: EspionageOpDTO; report: Inte
           </p>
         </div>
         <span className="seal seal-sm" aria-hidden>
-          密
+          <Glyph k="密" />
         </span>
       </div>
       <div className="mt-2.5">

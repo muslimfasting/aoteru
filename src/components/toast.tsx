@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
+import { Glyph } from '@/components/icons';
 type ToastKind = 'success' | 'error' | 'info';
 interface ToastItem {
   id: number;
@@ -76,7 +77,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               className={`pointer-events-auto flex w-full max-w-sm animate-rise items-start gap-3 rounded-[4px] border ${style.border} bg-ink-850/95 p-3 text-left shadow-2xl backdrop-blur`}
             >
               <span className={`seal seal-sm mt-0.5 ${style.cls}`} aria-hidden>
-                {style.seal}
+                <Glyph k={style.seal} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium text-parchment">{t.title}</span>

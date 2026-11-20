@@ -10,6 +10,7 @@ import { PILLARS, PILLAR_DEFS } from '@/game/pillars';
 import { Brand } from '@/components/Brand';
 import { apiGet } from '@/lib/api';
 
+import { Glyph } from '@/components/icons';
 const TINTS = ['#9b2d30', '#31487a', '#2f6b4f', '#b8862f', '#6a4a85'];
 
 function MapEngraving() {
@@ -22,7 +23,7 @@ function MapEngraving() {
           <polygon points={pts(p.polygon)} fill="#e6d9ba" stroke="#17130e" strokeWidth="3.5" strokeLinejoin="round" />
           <polygon points={pts(p.polygon)} fill={TINTS[i % TINTS.length]} fillOpacity={i % 3 === 0 ? 0.55 : i % 3 === 1 ? 0.25 : 0} />
           <text x={p.label[0]} y={p.label[1]} textAnchor="middle" fontFamily="var(--font-display)" fontSize="36" fontWeight="700" fill="#17130e" stroke="#f6ecd3" strokeWidth="5" paintOrder="stroke">
-            {p.kanji}
+            <Glyph k={p.kanji} />
           </text>
           <text x={p.label[0]} y={p.label[1] + 20} textAnchor="middle" fontFamily="var(--font-display)" fontSize="14" fontWeight="700" letterSpacing="2.5" fill="#17130e" stroke="#f6ecd3" strokeWidth="4" paintOrder="stroke">
             {p.name.toUpperCase()}
@@ -95,7 +96,7 @@ export default function LandingPage() {
 
           <div className="relative">
             <div className="vertical-text pointer-events-none absolute -left-2 top-2 z-10 select-none rounded-sm bg-vermilion px-1.5 py-3 font-display text-lg font-bold text-parchment-light shadow-lg sm:-left-5" aria-hidden>
-              天下統一
+              <Glyph k="天下統一" />
             </div>
             <div className="paper aspect-[1000/940] w-full overflow-hidden p-2 sm:p-3">
               <div className="h-full w-full overflow-hidden border border-ink-900/60 bg-[#1d2c33]">
@@ -117,7 +118,7 @@ export default function LandingPage() {
                 return (
                   <li key={id} className="panel p-4 text-center">
                     <span className="seal seal-lg mx-auto" aria-hidden>
-                      {p.kanji}
+                      <Glyph k={p.kanji} />
                     </span>
                     <h3 className="mt-3 font-display text-lg font-bold">{p.name}</h3>
                     <p className="mt-1 text-sm leading-relaxed text-muted">{p.purpose}</p>
@@ -150,7 +151,7 @@ export default function LandingPage() {
             <ul className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
               {REGIONS.map((r) => (
                 <li key={r.id} className="flex items-baseline gap-2 border-b border-ink-900/15 pb-1.5">
-                  <span className="font-display text-lg font-bold text-vermilion-deep">{r.kanji}</span>
+                  <span className="font-display text-lg font-bold text-vermilion-deep"><Glyph k={r.kanji} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="font-display font-bold">{r.name}</span>
                     <span className="block text-xs text-ink-700">{r.identity}</span>
@@ -175,7 +176,7 @@ function Feature({ kanji, title, children }: { kanji: string; title: string; chi
     <article className="panel p-5">
       <div className="flex items-center gap-3">
         <span className="seal" aria-hidden>
-          {kanji}
+          <Glyph k={kanji} />
         </span>
         <h3 className="font-display text-xl font-bold">{title}</h3>
       </div>

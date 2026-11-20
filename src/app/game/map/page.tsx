@@ -11,6 +11,7 @@ import { WorldMap } from '@/components/WorldMap';
 import { EVENTS } from '@/lib/events';
 import { useApi, useIsDesktop } from '@/lib/hooks';
 
+import { Glyph } from '@/components/icons';
 export default function MapPage() {
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
   const [selected, setSelected] = useState<string | null>(null);
@@ -106,7 +107,7 @@ function RealmSummary({ data, onSelect }: { data: WorldMapResponse; onSelect: (i
               <li key={b.id}>
                 <button type="button" onClick={() => onSelect(b.provinceId)} className="panel-flat flex min-h-[44px] w-full items-center gap-2 px-3 text-left hover:border-gold/40">
                   <span className="seal seal-sm" aria-hidden>
-                    戦
+                    <Glyph k="戦" />
                   </span>
                   <span className="flex-1 truncate font-display font-bold">{provinceName(b.provinceId)}</span>
                   <Countdown to={b.resolvesAt} className="text-sm text-gold-bright" done="resolving…" />

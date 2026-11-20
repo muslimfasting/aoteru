@@ -12,6 +12,7 @@ import { cx, fmtTime, timeAgo } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useAction, useApi, useIsDesktop } from '@/lib/hooks';
 
+import { Glyph } from '@/components/icons';
 type Tab = 'notifications' | 'chat';
 
 const TYPE_KANJI: Record<string, string> = {
@@ -105,7 +106,7 @@ function Notifications() {
             <li key={n.id}>
               <button type="button" onClick={() => open(n)} className={cx('flex min-h-[60px] w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-parchment/5', !n.readAt && 'bg-gold/8')}>
                 <span className={cx('seal seal-sm mt-0.5', n.readAt ? 'seal-ink' : '')} aria-hidden>
-                  {TYPE_KANJI[n.type] ?? '報'}
+                  <Glyph k={TYPE_KANJI[n.type] ?? '報'} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">

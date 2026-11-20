@@ -216,6 +216,74 @@ const PATHS = {
       <path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" />
     </>
   ),
+  // status and section icons
+  alert: (
+    <>
+      <path d="M12 3.5l9.5 16.5h-19z" />
+      <path d="M12 10v4.5M12 17.2v.3" />
+    </>
+  ),
+  shield: <path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z" />,
+  province: (
+    <>
+      <path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z" />
+      <circle cx="12" cy="10.5" r="2.3" />
+    </>
+  ),
+  scroll: (
+    <>
+      <path d="M7 4h11v13a3 3 0 0 1-3 3H6a3 3 0 0 0 3-3V6a2 2 0 0 0-4 0v2h4" />
+      <path d="M12 9h3M12 13h3" />
+    </>
+  ),
+  history: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  build: (
+    <>
+      <path d="M14 5l5 5-2.5 2.5-5-5z" />
+      <path d="M12.5 8.5L4 17l3 3 8.5-8.5" />
+    </>
+  ),
+  chat: <path d="M4 5h16v11h-9l-5 4v-4H4z" />,
+  cross: <path d="M6 6l12 12M18 6L6 18" />,
+  check: <path d="M4.5 12.5l5 5 10-11" />,
+  quake: <path d="M2 13h4l2-6 3.5 11 3-9 2 4H22" />,
+  fire: (
+    <>
+      <path d="M12 3c1 4 5 5.5 5 10.5a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 .5-3-.5-6 1-9z" />
+    </>
+  ),
+  crown: (
+    <>
+      <path d="M4 18l-1-10 5 4 4-7 4 7 5-4-1 10z" />
+      <path d="M4 21h16" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17" />
+    </>
+  ),
+  star: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
+  compass: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M15.5 8.5l-2 5-5 2 2-5z" />
+    </>
+  ),
+  expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
+  dot: <circle cx="12" cy="12" r="3" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
@@ -255,4 +323,103 @@ export function Icon({
       {PATHS[name]}
     </svg>
   );
+}
+
+/**
+ * Section and status markers are keyed by short codes in the screens (a legacy
+ * of the first design, which printed the codes themselves as seals). This table
+ * turns each code into a pictogram, so no screen ever shows the code.
+ */
+const CODE_ICON: Record<string, IconName> = {
+  '戦': 'military',
+  '報': 'messages',
+  '兵': 'army',
+  '忍': 'intel',
+  '軍': 'military',
+  '進': 'leadership',
+  '攻': 'military',
+  '和': 'diplomacy',
+  '天下統一': 'castle',
+  '城': 'castle',
+  '敵': 'alert',
+  '飢': 'food',
+  '国': 'province',
+  '柱': 'pillars',
+  '交': 'diplomacy',
+  '事': 'scroll',
+  '守': 'shield',
+  '家': 'leadership',
+  '古': 'history',
+  '募': 'people',
+  '築': 'build',
+  '談': 'chat',
+  '否': 'cross',
+  '可': 'check',
+  '天': 'castle',
+  '謀': 'intel',
+  '護': 'shield',
+  '蔵': 'gold',
+  '領': 'map',
+  '米': 'food',
+  '議': 'chat',
+  '征': 'military',
+  '豊': 'farm',
+  '商': 'market',
+  '震': 'quake',
+  '乱': 'fire',
+  '興': 'leadership',
+  '覇': 'crown',
+  '滅': 'cross',
+  '記': 'scroll',
+  '地': 'stone',
+  '陣': 'military',
+  '検': 'check',
+  '未': 'history',
+  '位': 'ranking',
+  '法': 'culture',
+  '史': 'history',
+  '潜': 'intel',
+  '闇': 'intel',
+  '失': 'cross',
+  '偵': 'intel',
+  '密': 'intel',
+  '設': 'settings',
+  '人': 'user',
+  '世': 'globe',
+  '練': 'barracks',
+  '静': 'messages',
+  '技': 'pillars',
+  '効': 'star',
+  '民': 'people',
+  '産': 'farm',
+  '祭': 'star',
+  '無': 'dot',
+  '勝': 'check',
+  '敗': 'cross',
+  '分': 'dot',
+  '止': 'cross',
+  '図': 'map',
+  '北': 'compass',
+  '全': 'expand',
+  '武': 'military',
+  '統': 'leadership',
+  '経': 'economy',
+  '文': 'culture',
+  '金': 'gold',
+  '木': 'wood',
+  '石': 'stone',
+  '鉄': 'iron',
+  '田': 'farm',
+  '市': 'market',
+  '道': 'dojo',
+  '足': 'ashigaru',
+  '槍': 'yari',
+  '弓': 'archer',
+  '侍': 'samurai',
+  '騎': 'cavalry',
+};
+
+/** Pictogram for a section or status code. Unknown codes (province names) get the map pin. */
+export function Glyph({ k, ...rest }: { k: string } & Omit<Parameters<typeof Icon>[0], 'name'>) {
+  return <Icon name={CODE_ICON[k] ?? 'province'} {...rest} />;
 }

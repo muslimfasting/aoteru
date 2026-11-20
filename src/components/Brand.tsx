@@ -1,14 +1,13 @@
 import Link from 'next/link';
 import { GAME_NAME, GAME_SUBTITLE } from '@/game/config';
 
-/** 天 — "heaven", as in tenka, the realm every daimyo hopes to unite. */
-export const BRAND_SEAL = '天';
 
+import { Icon } from './icons';
 export function Brand({ compact, href = '/game', size = 'md' }: { compact?: boolean; href?: string; size?: 'md' | 'lg' }) {
   return (
     <Link href={href} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2.5" aria-label={`${GAME_NAME}: ${GAME_SUBTITLE}`}>
       <span className={size === 'lg' ? 'seal seal-lg' : 'seal'} aria-hidden>
-        {BRAND_SEAL}
+        <Icon name="castle" />
       </span>
       {!compact ? (
         <span className="leading-none">

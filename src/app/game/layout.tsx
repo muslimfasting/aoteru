@@ -1,7 +1,7 @@
 'use client';
 
 import { GameShell } from '@/components/GameShell';
-import { BRAND_SEAL } from '@/components/Brand';
+import { Icon } from '@/components/icons';
 import { ErrorState, LoadingState } from '@/components/ui';
 import { GameProvider } from '@/lib/game-context';
 
@@ -10,7 +10,7 @@ function Gate({ children }: { children: React.ReactNode }) {
     <div className="grid min-h-dvh place-items-center p-6">
       <div className="flex flex-col items-center gap-4">
         <span className="seal seal-lg" aria-hidden>
-          {BRAND_SEAL}
+          <Icon name="castle" />
         </span>
         {children}
       </div>

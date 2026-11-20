@@ -22,7 +22,7 @@ import { cx, fmt } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import { useToast } from '@/components/toast';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 function nameError(value: string, rule: { min: number; max: number; pattern: RegExp }, what: string): string | null {
   const v = value.trim();
   if (v.length < rule.min || v.length > rule.max) return `${what} must be ${rule.min}–${rule.max} characters.`;
@@ -158,7 +158,7 @@ export default function FoundPage() {
           <section className="panel p-4 sm:p-5">
             <h2 className="mb-3 flex items-center gap-2.5 font-display text-xl font-bold">
               <span className="seal seal-sm" aria-hidden>
-                一
+                <Glyph k="一" />
               </span>
               Your Daimyo
             </h2>
@@ -191,7 +191,7 @@ export default function FoundPage() {
           <section className="panel p-4 sm:p-5">
             <h2 className="mb-3 flex items-center gap-2.5 font-display text-xl font-bold">
               <span className="seal seal-sm" aria-hidden>
-                二
+                <Glyph k="二" />
               </span>
               Your clan and banner
             </h2>
@@ -260,7 +260,7 @@ export default function FoundPage() {
         <section className="panel flex flex-col p-4 sm:p-5">
           <h2 className="mb-1 flex items-center gap-2.5 font-display text-xl font-bold">
             <span className="seal seal-sm" aria-hidden>
-              三
+              <Glyph k="三" />
             </span>
             Your first province
           </h2>
@@ -295,7 +295,7 @@ export default function FoundPage() {
                     onClick={() => setProvinceId(p.id)}
                     className={cx('btn btn-sm', p.id === provinceId && '!border-gold !bg-gold/20')}
                   >
-                    <span className="font-display font-bold">{p.kanji}</span> {p.name}
+                    <span className="font-display font-bold"><Glyph k={p.kanji} /></span> {p.name}
                   </button>
                 ))}
               </div>
@@ -303,7 +303,7 @@ export default function FoundPage() {
                 <div className="paper mt-3 p-3.5">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="font-display text-xl font-bold">
-                      {def.kanji} {selected.name}
+                      <Glyph k={def.kanji} /> {selected.name}
                     </h3>
                     <span className="chip">{TERRAIN_INFO[selected.terrain].name}</span>
                   </div>

@@ -16,6 +16,7 @@ import { useNow } from '@/lib/clock';
 import { cx, fmt } from '@/lib/format';
 import { MonGlyph } from './Banner';
 
+import { Icon } from './icons';
 const INK = '#17130e';
 const PAPER = '#e6d9ba';
 const CREAM = '#f6ecd3';
@@ -602,19 +603,16 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
                     </g>
                   ) : null}
 
-                  <text x={x} y={y} fontFamily="var(--font-display)" fontSize="34" fontWeight="700" fill={INK} stroke={CREAM} strokeOpacity="0.85" strokeWidth="5" paintOrder="stroke" strokeLinejoin="round">
-                    {def.kanji}
-                  </text>
-                  <text x={x} y={y + 19} fontFamily="var(--font-display)" fontSize="14.5" fontWeight="700" letterSpacing="2.4" fill={INK} stroke={CREAM} strokeOpacity="0.85" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round">
+                  <text x={x} y={y + 9} fontFamily="var(--font-display)" fontSize="21" fontWeight="700" fill={INK} stroke={CREAM} strokeOpacity="0.85" strokeWidth="5" paintOrder="stroke" strokeLinejoin="round" letterSpacing="1.5">
                     {def.name.toUpperCase()}
                   </text>
 
                   {total !== null ? (
                     <g transform={`translate(${x} ${y + 38})`}>
                       <rect x="-29" y="-11" width="58" height="20" rx="3" fill={INK} stroke="#e9c765" strokeWidth="1.1" />
-                      <text x="-17" y="4" fontFamily="var(--font-display)" fontSize="12" fontWeight="700" fill="#e9c765">
-                        兵
-                      </text>
+                      <g style={{ color: '#e9c765' }}>
+                        <Icon name="army" size={13} x={-25} y={-8} strokeWidth={2.2} />
+                      </g>
                       <text x="7" y="4" fontFamily="var(--font-body)" fontSize="12" fontWeight="700" fill={CREAM}>
                         {fmt(total)}
                       </text>
@@ -625,9 +623,9 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
                     <g transform={`translate(${x + 44} ${y - 34})`}>
                       <circle r="15" fill="none" stroke="#e2605c" strokeWidth="3" className="origin-center animate-pulse-ring [transform-box:fill-box]" />
                       <circle r="14" fill="#9b2d30" stroke={INK} strokeWidth="2" />
-                      <text y="6" fontFamily="var(--font-display)" fontSize="16" fontWeight="700" fill={CREAM}>
-                        戦
-                      </text>
+                      <g style={{ color: CREAM }}>
+                        <Icon name="military" size={17} x={-8.5} y={-8.5} strokeWidth={2.2} />
+                      </g>
                     </g>
                   ) : null}
                 </g>
@@ -639,9 +637,9 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
           <g pointerEvents="none" transform="translate(905 800)">
             <rect x="-62" y="-70" width="124" height="140" fill={PAPER} stroke={INK} strokeWidth="3" />
             <rect x="-56" y="-64" width="112" height="128" fill="none" stroke={INK} strokeWidth="1" />
-            <text y="-18" textAnchor="middle" fontFamily="var(--font-display)" fontSize="38" fontWeight="700" fill={INK}>
-              関西
-            </text>
+            <g style={{ color: INK }}>
+              <Icon name="castle" size={46} x={-23} y={-64} strokeWidth={1.4} />
+            </g>
             <text y="12" textAnchor="middle" fontFamily="var(--font-display)" fontSize="15" fontWeight="700" letterSpacing="5" fill={INK}>
               KANSAI
             </text>
@@ -649,9 +647,9 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
               the home provinces
             </text>
             <rect x="-13" y="40" width="26" height="18" fill="#9b2d30" />
-            <text y="54" textAnchor="middle" fontFamily="var(--font-display)" fontSize="13" fontWeight="700" fill={CREAM}>
-              図
-            </text>
+            <g style={{ color: CREAM }}>
+              <Icon name="map" size={14} x={-7} y={42} strokeWidth={2} />
+            </g>
           </g>
 
           {/* compass */}
@@ -659,8 +657,8 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
             <circle r="26" fill="none" stroke="#9fbcc2" strokeOpacity="0.5" strokeWidth="1.2" />
             <path d="M0,-34 L6,0 L0,34 L-6,0 Z" fill="#9fbcc2" fillOpacity="0.55" />
             <path d="M-34,0 L0,-5 L34,0 L0,5 Z" fill="#9fbcc2" fillOpacity="0.3" />
-            <text y="-39" textAnchor="middle" fontFamily="var(--font-display)" fontSize="14" fill="#cfe3e6">
-              北
+            <text y="-39" textAnchor="middle" fontFamily="var(--font-display)" fontSize="14" fontWeight="700" fill="#cfe3e6">
+              N
             </text>
           </g>
         </g>
@@ -690,7 +688,7 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
               }}
               aria-label="Reset the map view"
             >
-              全
+              <Icon name="expand" />
             </button>
           </div>
 
@@ -705,12 +703,12 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
                   label="Unclaimed, held by local warriors"
                 />
                 <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">＋</span>} label="Open for a new clan" />
-                <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">戦</span>} label="Battle in progress" />
-                <LegendRow swatch={<span className="font-display text-sm font-bold">兵</span>} label="Your garrison" />
+                <LegendRow swatch={<span className="text-vermilion"><Icon name="military" /></span>} label="Battle in progress" />
+                <LegendRow swatch={<Icon name="army" />} label="Your garrison" />
               </div>
             ) : null}
             <button type="button" className="btn btn-ink btn-sm !min-h-[44px] shadow-lg" onClick={() => setLegendOpen((o) => !o)} aria-expanded={legendOpen}>
-              <span className="font-display">凡例</span> Legend
+              <Icon name="map" /> Legend
             </button>
           </div>
         </>

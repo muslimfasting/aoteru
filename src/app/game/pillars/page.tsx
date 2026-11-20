@@ -9,7 +9,7 @@ import { EVENTS } from '@/lib/events';
 import { cx, fmt } from '@/lib/format';
 import { useAction, useApi } from '@/lib/hooks';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 const MOD_LABELS: Record<ModifierKey, { label: string; kind: 'pct' | 'flat'; sign?: -1 }> = {
   attack: { label: 'Army attack', kind: 'pct' },
   toughness: { label: 'Army toughness', kind: 'pct' },
@@ -129,7 +129,7 @@ export default function PillarsPage() {
           {/* pillar summary */}
           <section className="paper p-4 sm:p-5">
             <div className="flex items-start gap-4">
-              <div className="grid h-16 w-16 shrink-0 place-items-center border-2 border-ink-900 font-display text-4xl font-bold text-vermilion-deep">{def.kanji}</div>
+              <div className="grid h-16 w-16 shrink-0 place-items-center border-2 border-ink-900 font-display text-4xl font-bold text-vermilion-deep"><Glyph k={def.kanji} /></div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                   <h2 className="font-display text-2xl font-extrabold leading-tight">{def.name}</h2>

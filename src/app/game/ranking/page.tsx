@@ -9,7 +9,8 @@ import { cx, fmt } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useApi } from '@/lib/hooks';
 
-const PLACE = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+import { Glyph } from '@/components/icons';
+const PLACE = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 
 export default function RankingPage() {
   const state = useApi<LeaderboardResponse>('/api/leaderboard', EVENTS.ranking);

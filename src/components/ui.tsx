@@ -5,7 +5,7 @@ import { RESOURCE_INFO, RESOURCE_KEYS, UNITS, UNIT_TYPES, type ResourceBag, type
 import { useNow } from '@/lib/clock';
 import { cx, fmt, fmtClock, fmtDuration } from '@/lib/format';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 // ---------------------------------------------------------------------------
 // Layout primitives
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ export function Panel({
         <header className="flex items-center gap-3 border-b border-gold/15 px-4 py-3">
           {kanji ? (
             <span className="seal seal-sm seal-ink" aria-hidden>
-              {kanji}
+              <Glyph k={kanji} />
             </span>
           ) : null}
           <h2 className="min-w-0 flex-1 truncate font-display text-[1.02rem] font-bold tracking-wide text-parchment">{title}</h2>
@@ -57,7 +57,7 @@ export function PageHeader({
   return (
     <header className="mb-4 flex items-center gap-3 lg:mb-5">
       <span className="seal seal-lg hidden sm:inline-grid" aria-hidden>
-        {kanji}
+        <Glyph k={kanji} />
       </span>
       <div className="min-w-0 flex-1">
         <h1 className="font-display text-2xl font-extrabold leading-tight tracking-wide text-parchment lg:text-[1.75rem]">{title}</h1>
@@ -130,7 +130,7 @@ export function LoadingState({ label = 'Unrolling the scrolls…', className }: 
 export function ErrorState({ message, onRetry, className }: { message: string; onRetry?: () => void; className?: string }) {
   return (
     <div className={cx('flex flex-col items-center justify-center gap-3 py-10 text-center', className)}>
-      <Seal>否</Seal>
+      <Seal><Glyph k="否" /></Seal>
       <p className="max-w-sm text-sm text-parchment">{message}</p>
       {onRetry ? (
         <button type="button" className="btn btn-sm" onClick={onRetry}>
@@ -144,7 +144,7 @@ export function ErrorState({ message, onRetry, className }: { message: string; o
 export function EmptyState({ kanji = '無', title, children, className }: { kanji?: string; title: string; children?: React.ReactNode; className?: string }) {
   return (
     <div className={cx('flex flex-col items-center justify-center gap-2 py-8 text-center', className)}>
-      <Seal tone="ink">{kanji}</Seal>
+      <Seal tone="ink"><Glyph k={kanji} /></Seal>
       <p className="font-display text-base font-bold text-parchment">{title}</p>
       {children ? <div className="max-w-sm text-sm text-muted">{children}</div> : null}
     </div>
@@ -272,7 +272,7 @@ export function Dialog({
         style={{ background: 'linear-gradient(180deg,#2a241b,#191510)' }}
       >
         <header className="flex items-center gap-3 border-b border-gold/20 px-4 py-3">
-          {kanji ? <Seal size="sm">{kanji}</Seal> : null}
+          {kanji ? <Seal size="sm"><Glyph k={kanji} /></Seal> : null}
           <h2 id={titleId} className="min-w-0 flex-1 truncate font-display text-lg font-bold">
             {title}
           </h2>

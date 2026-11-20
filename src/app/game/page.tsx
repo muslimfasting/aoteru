@@ -13,7 +13,7 @@ import { useGame } from '@/lib/game-context';
 import { useApi } from '@/lib/hooks';
 import { gameDateText } from '@/lib/world';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 export default function OverviewPage() {
   const { clan, world, resources } = useGame();
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
@@ -187,7 +187,7 @@ export default function OverviewPage() {
               <ul className="divide-y divide-gold/10">
                 {own.map((p) => (
                   <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                    <div className="paper grid h-11 w-11 shrink-0 place-items-center font-display text-lg font-bold">{p.kanji}</div>
+                    <div className="paper grid h-11 w-11 shrink-0 place-items-center font-display text-lg font-bold"><Glyph k={p.kanji} /></div>
                     <div className="min-w-[7rem] flex-1">
                       <div className="font-display text-base font-bold leading-tight">
                         {p.name}
@@ -253,7 +253,7 @@ function Alert({ tone, kanji, children }: { tone: 'red' | 'gold'; kanji: string;
       className={cx('flex items-start gap-3 rounded-[4px] border px-3.5 py-3 text-sm leading-relaxed', tone === 'red' ? 'border-vermilion-bright/60 bg-vermilion/20' : 'border-gold/40 bg-gold/10')}
     >
       <span className={cx('seal seal-sm mt-0.5', tone === 'gold' && 'seal-gold')} aria-hidden>
-        {kanji}
+        <Glyph k={kanji} />
       </span>
       <p className="min-w-0 flex-1">{children}</p>
     </div>
@@ -282,7 +282,7 @@ function Counsel({ clan, world, ownCount, hasUnclaimedNeighbour }: { clan: ClanS
         {advice.slice(0, 4).map((a) => (
           <li key={a.kanji} className="flex items-center gap-3">
             <span className="seal seal-sm seal-ink" aria-hidden>
-              {a.kanji}
+              <Glyph k={a.kanji} />
             </span>
             <p className="min-w-0 flex-1 text-sm leading-relaxed text-parchment/90">{a.text}</p>
             <Link href={a.href} className="btn btn-sm shrink-0">
@@ -314,7 +314,7 @@ function Chronicle({ world, entries, loading }: { world: WorldMetaDTO; entries: 
     <section className="paper self-start">
       <header className="flex items-center gap-3 border-b border-ink-900/25 px-4 py-3">
         <span className="seal seal-sm" aria-hidden>
-          記
+          <Glyph k="記" />
         </span>
         <h2 className="flex-1 font-display text-[1.05rem] font-bold tracking-wide">Chronicle of the Realm</h2>
       </header>
@@ -328,7 +328,7 @@ function Chronicle({ world, entries, loading }: { world: WorldMetaDTO; entries: 
             {entries.map((e) => (
               <li key={e.id} className="flex gap-3">
                 <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center border border-ink-900/50 font-display text-sm font-bold text-vermilion-deep" aria-hidden>
-                  {EVENT_KANJI[e.type] ?? '事'}
+                  <Glyph k={EVENT_KANJI[e.type] ?? '事'} />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[0.66rem] uppercase tracking-[0.12em] text-ink-600">{gameDateText(world, e.startsAt)}</p>

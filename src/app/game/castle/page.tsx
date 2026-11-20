@@ -14,7 +14,7 @@ import { cx, fmt, missingResources } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useAction, useApi } from '@/lib/hooks';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 export default function CastlePage() {
   return (
     <Suspense fallback={<LoadingState />}>
@@ -73,7 +73,7 @@ function ProvinceSwitcher({ provinces, selectedId, onSelect }: { provinces: Prov
               active ? 'border-gold bg-gold/15' : 'border-gold/20 bg-ink-800/60 hover:border-gold/50',
             )}
           >
-            <span className={cx('grid h-9 w-9 place-items-center font-display text-base font-bold', active ? 'paper' : 'border border-gold/25 text-gold')}>{p.kanji}</span>
+            <span className={cx('grid h-9 w-9 place-items-center font-display text-base font-bold', active ? 'paper' : 'border border-gold/25 text-gold')}><Glyph k={p.kanji} /></span>
             <span className="leading-tight">
               <span className="block font-display font-bold">{p.name}</span>
               <span className="block text-[0.68rem] text-muted">
@@ -138,7 +138,6 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
     <div className="space-y-4 lg:space-y-5">
     <CityView
       name={province.name}
-      kanji={province.kanji}
       terrain={province.terrain}
       levels={levels}
       upgrading={underConstruction}

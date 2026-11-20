@@ -2,12 +2,13 @@ import Link from 'next/link';
 import { GAME_TAGLINE } from '@/game/config';
 import { Brand } from './Brand';
 
+import { Glyph } from '@/components/icons';
 /** Shared frame for the sign-in and registration screens. */
 export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle: string; children: React.ReactNode; footer: React.ReactNode }) {
   return (
     <div className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
       <div className="vertical-text pointer-events-none absolute right-4 top-8 hidden select-none font-display text-5xl font-bold text-parchment/[0.06] sm:block lg:right-16 lg:text-7xl" aria-hidden>
-        天下統一
+        <Glyph k="天下統一" />
       </div>
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">

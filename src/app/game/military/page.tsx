@@ -15,7 +15,7 @@ import { useGame } from '@/lib/game-context';
 import { useAction, useApi, useIsDesktop, type ApiState } from '@/lib/hooks';
 import { RESULT_STYLE, viewerResult } from '@/lib/world';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 type Tab = 'recruit' | 'armies' | 'battles';
 
 export default function MilitaryPage() {
@@ -389,7 +389,7 @@ function BattleRow({ b, now, onDone }: { b: BattleSummaryDTO; now: number; onDon
     <li>
       <Link href={`/game/battles/${b.id}`} className="flex min-h-[60px] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-parchment/5">
         <span className={cx('seal', result === 'won' && 'seal-gold', (result === 'draw' || result === 'cancelled') && 'seal-ink')} aria-hidden>
-          {style.kanji}
+          <Glyph k={style.kanji} />
         </span>
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate font-display text-base font-bold">

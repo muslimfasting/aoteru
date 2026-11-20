@@ -19,7 +19,7 @@ import { useNow } from '@/lib/clock';
 import { MonBadge, NeutralBadge } from './Banner';
 import { ActionButton, Bar, ConfirmDialog, Countdown, ErrorState, LoadingState, TimedProgress, UnitsRow } from './ui';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 export function relationChip(relation: string): { label: string; cls: string } {
   switch (relation) {
     case 'own':
@@ -74,7 +74,7 @@ export function ProvincePanel({
       {/* header */}
       <header className="flex items-start gap-3 border-b border-gold/20 p-4">
         <div className="paper grid h-16 w-16 shrink-0 place-items-center">
-          <span className="font-display text-[1.9rem] font-bold leading-none">{def?.kanji ?? p.kanji}</span>
+          <span className="font-display text-[1.9rem] font-bold leading-none"><Glyph k={def?.kanji ?? p.kanji} /></span>
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-2xl font-extrabold leading-tight">{p.name}</h2>

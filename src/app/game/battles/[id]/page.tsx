@@ -11,7 +11,7 @@ import { cx, fmt, fmtDateTime, fmtPct } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import { RESULT_STYLE, viewerResult } from '@/lib/world';
 
-import { Icon } from '@/components/icons';
+import { Glyph, Icon } from '@/components/icons';
 export default function BattleReportPage() {
   const { id } = useParams<{ id: string }>();
   const state = useApi<BattleDetailResponse>(id ? `/api/battles/${id}` : null, EVENTS.battles);
@@ -51,7 +51,7 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
       <div className="space-y-4">
         <section className="paper p-5 text-center sm:p-8">
           <span className="seal seal-lg mx-auto" aria-hidden>
-            戦
+            <Glyph k="戦" />
           </span>
           <h1 className="mt-3 font-display text-3xl font-extrabold">Battle for {b.provinceName}</h1>
           <p className="mt-1 font-display text-lg">
@@ -88,7 +88,7 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
         <div className={cx('h-2', view === 'won' ? 'bg-gold' : view === 'lost' ? 'bg-vermilion' : 'bg-ink-500')} />
         <div className="flex flex-col items-center gap-2 p-5 text-center sm:p-7">
           <span className={cx('seal seal-lg', view === 'won' && 'seal-gold', view === 'draw' && 'seal-ink')} aria-hidden>
-            {style.kanji}
+            <Glyph k={style.kanji} />
           </span>
           <p className="text-[0.72rem] uppercase tracking-[0.2em] text-ink-600">
             {youAttack ? 'You attacked' : 'You defended'} · {b.resolvedAt ? fmtDateTime(b.resolvedAt) : ''}
@@ -180,11 +180,11 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
           <span className="text-center">
             {verified ? (
               <>
-                <span className="block text-lg leading-none">検</span>verified
+                <span className="block text-lg leading-none"><Glyph k="検" /></span>verified
               </>
             ) : (
               <>
-                <span className="block text-lg leading-none">未</span>unchecked
+                <span className="block text-lg leading-none"><Glyph k="未" /></span>unchecked
               </>
             )}
           </span>
