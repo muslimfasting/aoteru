@@ -434,6 +434,17 @@ input[type='number'] {
     accent-color: var(--color-gold);
     cursor: pointer;
   }
+
+  /* The moving outline around a building under construction on the castle-town map. */
+  .city-build {
+    animation: city-build 1.4s linear infinite;
+  }
+}
+
+@keyframes city-build {
+  to {
+    stroke-dashoffset: -28;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
