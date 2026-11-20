@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { ClanHubResponse, ClanSelfDTO, WorldEventDTO, WorldMapResponse, WorldMetaDTO } from '@/game/api';
-import { RESOURCE_INFO, RESOURCE_KEYS, totalUnits } from '@/game/config';
+import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, totalUnits } from '@/game/config';
 import { Banner } from '@/components/Banner';
 import { Portrait } from '@/components/Portrait';
 import { Bar, Countdown, EmptyState, ErrorState, LoadingState, Panel, Stat } from '@/components/ui';
@@ -174,7 +174,7 @@ export default function OverviewPage() {
               </span>
             </div>
             <Bar value={clan.army.total + clan.army.recruiting} max={clan.army.capacity} tone={clan.army.total + clan.army.recruiting >= clan.army.capacity ? 'red' : 'gold'} label="Army capacity used" />
-            <p className="mt-2 text-xs leading-relaxed text-muted">Raise capacity with castle levels and the Leadership pillar.</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted">Raise capacity with {BUILDINGS.castle.name} levels and the Leadership pillar.</p>
           </div>
         </Panel>
       </div>
@@ -209,7 +209,7 @@ export default function OverviewPage() {
                         {p.underAttack ? <span className="chip chip-red ml-2 align-middle">Under attack</span> : null}
                       </div>
                       <div className="num text-xs text-muted">
-                        Castle Lv {p.castleLevel} · {fmt(p.population)} people · {fmt(p.garrison ? totalUnits(p.garrison) : 0)} soldiers
+                        {BUILDINGS.castle.name} Lv {p.castleLevel} · {fmt(p.population)} people · {fmt(p.garrison ? totalUnits(p.garrison) : 0)} soldiers
                       </div>
                     </div>
                     <div className="w-28">
@@ -278,13 +278,13 @@ function Alert({ tone, kanji, children }: { tone: 'red' | 'gold'; kanji: string;
 function Counsel({ clan, world, ownCount, hasUnclaimedNeighbour }: { clan: ClanSelfDTO; world: WorldMetaDTO; ownCount: number; hasUnclaimedNeighbour: boolean }) {
   const advice: { kanji: string; text: React.ReactNode; href: string; cta: string }[] = [];
   if (clan.income.net.food < 0) {
-    advice.push({ kanji: '米', text: 'The granaries are draining. Raise the Farm, or the army will eat the province bare.', href: '/game/castle', cta: 'Castle' });
+    advice.push({ kanji: '米', text: 'The granaries are draining. Raise the Farm, or the army will eat the province bare.', href: '/game/castle', cta: 'Province' });
   }
   if (clan.army.total + clan.army.recruiting < clan.army.capacity * 0.6) {
     advice.push({ kanji: '兵', text: 'Our captains can lead far more men than we have under arms. Muster soldiers at the Barracks.', href: '/game/military', cta: 'Recruit' });
   }
   if (ownCount <= 1 && hasUnclaimedNeighbour) {
-    advice.push({ kanji: '攻', text: 'An unclaimed neighbour is held only by local warriors. Scout it, then march — a second province doubles our strength.', href: '/game/map', cta: 'Map' });
+    advice.push({ kanji: '攻', text: 'An unclaimed neighbour is held only by local militia. Scout it, then march — a second province doubles our strength.', href: '/game/map', cta: 'Map' });
   }
   advice.push({ kanji: '柱', text: 'Every deed sharpens one of the Five Pillars. Spend skill points as they come — an official who specialises outgrows one who does not.', href: '/game/pillars', cta: 'Pillars' });
   if (clan.provinceCount < world.hegemonyProvinces && ownCount > 1) {

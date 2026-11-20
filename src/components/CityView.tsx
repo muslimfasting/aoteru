@@ -1,5 +1,5 @@
 /**
- * The castle town of a province, drawn from above like a hand-coloured survey map.
+ * The chief town of a province, drawn from above like a hand-coloured survey map.
  *
  * Purely presentational: every element is derived from the building levels the
  * server reports, so the town visibly grows as the player builds — more tiers
@@ -70,18 +70,18 @@ export interface CityViewProps {
 
 /** What the next levels will add to the map, so it doubles as a goal list. */
 const LANDMARKS: { type: BuildingType; level: number; text: string }[] = [
-  { type: 'barracks', level: 1, text: 'a drill ground behind a palisade' },
+  { type: 'barracks', level: 1, text: 'a drill yard behind a palisade' },
   { type: 'market', level: 1, text: 'the first shops along the highway' },
-  { type: 'castle', level: 2, text: 'a second roof on the keep and your banners' },
-  { type: 'barracks', level: 2, text: 'an archery range' },
-  { type: 'dojo', level: 1, text: 'a walled training hall and its gate' },
+  { type: 'castle', level: 2, text: 'a second roof on the keep and your flags' },
+  { type: 'barracks', level: 2, text: 'a rifle range' },
+  { type: 'dojo', level: 1, text: 'the academy hall and its gate' },
   { type: 'farm', level: 3, text: 'a white-walled storehouse' },
   { type: 'castle', level: 3, text: 'plastered walls and a gatehouse' },
   { type: 'market', level: 3, text: 'a brick trading house' },
   { type: 'dojo', level: 2, text: 'stables and a paddock' },
   { type: 'barracks', level: 4, text: 'a brick armoury' },
   { type: 'castle', level: 4, text: 'a fourth roof on the keep' },
-  { type: 'dojo', level: 4, text: 'rows of training posts' },
+  { type: 'dojo', level: 4, text: 'rows of bayonet-drill posts' },
   { type: 'market', level: 5, text: 'a clock tower on the square' },
   { type: 'castle', level: 5, text: 'the full five-roofed keep' },
   { type: 'farm', level: 6, text: 'a water mill' },
@@ -753,7 +753,7 @@ function CityViewImpl({ name, terrain, levels, upgrading, bannerHex, hour, class
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="xMidYMid slice"
           role="img"
-          aria-label={`Map of the castle town of ${name}: castle level ${levels.castle}, farm ${levels.farm}, market ${levels.market}, barracks ${levels.barracks}, dojo ${levels.dojo}.`}
+          aria-label={`Map of the town of ${name}: ${(['castle', 'farm', 'market', 'barracks', 'dojo'] as const).map((t) => `${BUILDINGS[t].name} level ${levels[t]}`).join(', ')}.`}
           className="block aspect-[4/3] w-full sm:aspect-[24/11]"
         >
           <defs>
@@ -909,7 +909,7 @@ function CityViewImpl({ name, terrain, levels, upgrading, bannerHex, hour, class
               ) : null}
             </g>
           ) : (
-            <Lot x={600} y={40} w={156} h={110} label="ground for a dojo" />
+            <Lot x={600} y={40} w={156} h={110} label="ground for an academy" />
           )}
           {market > 0 ? (
             <g>

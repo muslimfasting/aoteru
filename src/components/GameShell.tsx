@@ -34,7 +34,7 @@ interface NavItem {
 const BASE_NAV: NavItem[] = [
   { href: '/game', label: 'Overview', icon: 'overview', purpose: 'State of the nation', clanOnly: true },
   { href: '/game/map', label: 'Japan Map', short: 'Map', icon: 'map', purpose: 'Territory' },
-  { href: '/game/castle', label: 'Castle', icon: 'castle', purpose: 'Provinces and buildings', clanOnly: true },
+  { href: '/game/castle', label: 'Province', icon: 'castle', purpose: 'Provinces and buildings', clanOnly: true },
   { href: '/game/military', label: 'Military', icon: 'military', purpose: 'Army and warfare', clanOnly: true },
   { href: '/game/war', label: 'War Council', short: 'War', icon: 'war', purpose: 'Plans and strategy', clanOnly: true },
   { href: '/game/clan', label: 'Nation', icon: 'clan', purpose: 'Government and treasury' },

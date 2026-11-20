@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import type { BuildingDTO, ProvinceDetailResponse, ProvinceSummaryDTO, WorldMapResponse } from '@/game/api';
-import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, armyPower, bannerHex, emptyBuildingLevels, totalUnits } from '@/game/config';
+import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, UNITS, armyPower, bannerHex, emptyBuildingLevels, totalUnits } from '@/game/config';
 import { CityView } from '@/components/CityView';
 import { StancePanel } from '@/components/StancePanel';
 import { ActionButton, Bar, CostRow, Countdown, DurationText, EmptyState, ErrorState, LoadingState, PageHeader, Panel, TimedProgress, UnitsRow } from '@/components/ui';
@@ -40,13 +40,13 @@ function CastleScreen() {
 
   return (
     <div>
-      <PageHeader kanji="城" title="Castle" subtitle="Raise buildings, tend your people, and keep the province loyal." />
+      <PageHeader kanji="城" title="Province" subtitle="Raise buildings, tend your people, and keep the province loyal." />
       {map.error && !map.data ? (
         <ErrorState message={map.error.message} onRetry={() => void map.refresh()} />
       ) : !map.data ? (
         <LoadingState />
       ) : own.length === 0 || !selectedId ? (
-        <EmptyState title="You hold no province">Without land there is no castle to manage.</EmptyState>
+        <EmptyState title="You hold no province">Without land there is nothing to govern.</EmptyState>
       ) : (
         <>
           <ProvinceSwitcher provinces={own} selectedId={selectedId} onSelect={(id) => router.replace(`/game/castle?province=${id}`, { scroll: false })} />
@@ -78,7 +78,7 @@ function ProvinceSwitcher({ provinces, selectedId, onSelect }: { provinces: Prov
             <span className="leading-tight">
               <span className="block font-display font-bold">{p.name}</span>
               <span className="block text-[0.68rem] text-muted">
-                Castle Lv {p.castleLevel}
+                {BUILDINGS.castle.name} Lv {p.castleLevel}
                 {p.isCapital ? ' · capital' : ''}
               </span>
             </span>
@@ -99,9 +99,9 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
   const now = useNow();
 
   if (state.error && !state.data) return <ErrorState message={state.error.message} onRetry={() => void state.refresh()} />;
-  if (!state.data) return <LoadingState label="Summoning the castle steward…" />;
+  if (!state.data) return <LoadingState label="Sending for the provincial clerk…" />;
   const { province, own } = state.data;
-  if (!own) return <EmptyState title={`${province.name} is no longer yours`}>Another banner flies over this castle.</EmptyState>;
+  if (!own) return <EmptyState title={`${province.name} is no longer yours`}>Another flag flies over it now.</EmptyState>;
 
   const upgrade = (b: BuildingDTO) =>
     build.run(
@@ -308,7 +308,7 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
           {own.recruitment.length > 0 ? (
             <div className="mt-3 space-y-2.5">
               {own.recruitment.map((r) => (
-                <TimedProgress key={r.id} from={r.startedAt} to={r.completesAt} label={`Mustering ${fmt(r.count)} ${r.unitType}`} onDone={() => void state.refresh()} />
+                <TimedProgress key={r.id} from={r.startedAt} to={r.completesAt} label={`Mustering ${fmt(r.count)} ${UNITS[r.unitType].name}`} onDone={() => void state.refresh()} />
               ))}
             </div>
           ) : null}

@@ -24,7 +24,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
     <GameProvider
       fallback={
         <Gate>
-          <LoadingState label="Opening the castle gates…" className="!py-0" />
+          <LoadingState label="Opening the gates…" className="!py-0" />
         </Gate>
       }
       renderError={(message, retry) => (

@@ -1,6 +1,6 @@
 /**
  * Pictogram icons. Each one is a plain line drawing of the thing it stands for
- * (a coin for gold, a rice bowl for food, crossed swords for the army), so the
+ * (a coin for gold, a rice bowl for food, crossed sabres for the army), so the
  * interface can be read without knowing any kanji. They inherit the text colour
  * and scale with the font size of their container.
  */
@@ -158,43 +158,52 @@ const PATHS = {
       <path d="M12 7V2.5h4.5L15 4l1.5 1.5H12" />
     </>
   ),
+  /** A hall with a pediment, an arched door and a flag: the academy. (The key is older than the name.) */
   dojo: (
     <>
-      <path d="M3 6.5c3 1 15 1 18 0" />
-      <path d="M5 10h14" />
-      <path d="M7 7v14M17 7v14" />
+      <path d="M3 20.5h18" />
+      <path d="M4 10.5l8-4.5 8 4.5z" />
+      <path d="M6.5 10.5v10M17.5 10.5v10" />
+      <path d="M10 20.5V16a2 2 0 0 1 4 0v4.5" />
+      <path d="M12 6V2.2h3.6l-1.1 1.3 1.1 1.3H12" />
     </>
   ),
-  // units
+  // units — the keys are the stored type ids; the drawings follow the names shown to players
+  /** A soldier in a plain forage cap: militia. */
   ashigaru: (
     <>
-      <path d="M3 15l9-9 9 9z" />
-      <path d="M2 15h20" />
-      <path d="M8.5 15v2a3.5 3.5 0 0 0 7 0v-2" />
+      <path d="M5 20.5a7 7 0 0 1 14 0" />
+      <path d="M8.8 9.5a3.2 3.2 0 0 0 6.4 0" />
+      <path d="M8.3 9.5V7.2a2 2 0 0 1 2-2h3.4a2 2 0 0 1 2 2v2.3" />
+      <path d="M8.3 9.5h10.4" />
     </>
   ),
+  /** A rifle with its bayonet fixed: line infantry. */
   yari: (
     <>
-      <path d="M4 20L16 8" />
-      <path d="M16 8l1-5 3 3-5 1z" />
-      <path d="M7 14l3 3" />
+      <path d="M3 18.2l3.4-3.4 2.8 2.8-3.4 3.4z" />
+      <path d="M7.8 16.2L15 9" />
+      <path d="M13.6 7.6l2.8 2.8" />
+      <path d="M15 9l6.3-6.3-1.4 3.6z" />
+      <path d="M9.6 17.6c3.2-.2 5.2-2.4 5.6-5.4" />
     </>
   ),
+  /** A levelled rifle, firing: riflemen. */
   archer: (
     <>
-      <path d="M6 3c8 3 8 15 0 18" />
-      <path d="M6 3v18" />
-      <path d="M3 12h17" />
-      <path d="M17 9l3 3-3 3" />
+      <path d="M20 10.5H9.5L2.5 12.8l1 3.6 6.3-3.1H13l1-2.8" />
+      <path d="M9.8 13.3c.2 1.9 2.6 1.9 2.8 0" />
+      <path d="M21.7 8.3l1-1M22 10.5h1.2M21.7 12.7l1 1" />
     </>
   ),
+  /** A star on its ribbon: the Guards. */
   samurai: (
     <>
-      <path d="M5 13a7 7 0 0 1 14 0v2H5z" />
-      <path d="M3 15h18l-2 4H5z" />
-      <path d="M9 6.5L7 2.5M15 6.5l2-4" />
+      <path d="M9 2.8h6v3.6l-3 2.8-3-2.8z" />
+      <path d="M12 9.2l1.4 3.7 3.9.2-3 2.4 1 3.8-3.3-2.1-3.3 2.1 1-3.8-3-2.4 3.9-.2z" />
     </>
   ),
+  /** A horse's head: cavalry. */
   cavalry: (
     <>
       <path d="M7 21c0-5 1-8 4-10l-1-3 3-4 2 3c3 1 5 4 5 7l-3 2-3-2-2 2v5" />

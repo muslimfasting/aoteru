@@ -7,6 +7,7 @@
  * resolved.
  */
 import type { BattleInputs } from '@/game/battle';
+import { BUILDINGS } from '@/game/config';
 import { STANCE_DEFS, TACTIC_DEFS, type StrategySideEffect } from '@/game/strategy';
 import { Icon } from '@/components/icons';
 import { cx } from '@/lib/format';
@@ -23,7 +24,7 @@ function effects(e: StrategySideEffect): { text: string; good: boolean }[] {
   if (e.attack) out.push({ text: `${pct(e.attack)} damage`, good: e.attack > 0 });
   if (e.toughness) out.push({ text: `${pct(e.toughness)} protection`, good: e.toughness > 0 });
   if (e.firstRound) out.push({ text: `${pct(e.firstRound)} damage in the opening round`, good: e.firstRound > 0 });
-  if (e.siege) out.push({ text: `${Math.round(e.siege * 100)}% of the castle bonus ignored`, good: e.siege > 0 });
+  if (e.siege) out.push({ text: `${Math.round(e.siege * 100)}% of the ${BUILDINGS.castle.name.toLowerCase()} bonus ignored`, good: e.siege > 0 });
   if (e.morale) out.push({ text: `${flat(e.morale)} morale`, good: e.morale > 0 });
   return out;
 }
@@ -64,7 +65,7 @@ export function StrategyReport({ inputs, youAttack }: { inputs: BattleInputs; yo
   const forYou = v.favours === 'none' ? 'none' : (v.favours === 'attacker') === youAttack ? 'good' : 'bad';
   const a = effects(s.attacker);
   const d = effects(s.defender);
-  const walls = s.positionFactor < 1 ? `Castle and terrain counted for only ${Math.round(s.positionFactor * 100)}% of their worth.` : null;
+  const walls = s.positionFactor < 1 ? `${BUILDINGS.castle.name} and terrain counted for only ${Math.round(s.positionFactor * 100)}% of their worth.` : null;
 
   return (
     <Panel title="Strategy" icon="tactic">

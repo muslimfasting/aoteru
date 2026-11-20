@@ -677,7 +677,7 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
         <>
           <div className="absolute right-3 top-3 flex flex-col gap-1.5">
             <button type="button" className="btn btn-ink !min-h-[44px] !w-[44px] !px-0 text-xl shadow-lg" onClick={() => zoomButton(1.4)} aria-label="Zoom in" disabled={view.k >= MAX_ZOOM}>
-              ＋
+              +
             </button>
             <button type="button" className="btn btn-ink !min-h-[44px] !w-[44px] !px-0 text-xl shadow-lg" onClick={() => zoomButton(1 / 1.4)} aria-label="Zoom out" disabled={view.k <= MIN_ZOOM + 0.001}>
               −
@@ -704,9 +704,9 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-ink-900 bg-[#31487a]/60" />} label="Another nation" />
                 <LegendRow
                   swatch={<span className="block h-3.5 w-5 border-2 border-ink-900" style={{ background: 'repeating-linear-gradient(128deg,#e6d9ba 0 3px,#c9bb98 3px 5px)' }} />}
-                  label="Unclaimed, held by local warriors"
+                  label="Unclaimed, held by local militia"
                 />
-                <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">＋</span>} label="Open for a new nation" />
+                <LegendRow swatch={<span className="font-display text-sm font-bold text-vermilion">+</span>} label="Open for a new nation" />
                 <LegendRow swatch={<span className="text-vermilion"><Icon name="military" /></span>} label="Battle in progress" />
                 <LegendRow swatch={<Icon name="army" />} label="Your garrison" />
               </div>

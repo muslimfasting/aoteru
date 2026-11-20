@@ -373,7 +373,7 @@ function BattleHistory({ state }: { state: ApiState<BattleListResponse> }) {
         <LoadingState />
       ) : state.data.battles.length === 0 ? (
         <EmptyState kanji="和" title="No battles yet">
-          Your blades are still clean. Reports from every battle you fight will be kept here.
+          Not a shot fired yet. Reports from every battle you fight will be kept here.
         </EmptyState>
       ) : (
         <ul className="divide-y divide-gold/10">

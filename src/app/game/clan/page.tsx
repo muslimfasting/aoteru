@@ -317,7 +317,7 @@ function Overview({ hub, state, onLeft }: { hub: ClanHubResponse; state: HubStat
           <p className="text-sm text-muted">
             {isLeader
               ? alone
-                ? 'You are the last official. Leaving dissolves the nation: its land returns to the local warriors and its name becomes free.'
+                ? 'You are the last official. Leaving dissolves the nation: its land returns to the local militia and its name becomes free.'
                 : 'Whoever leads cannot simply walk away. Hand the leadership to another official first (Officials tab).'
               : 'You keep your purse and everything you have learned in the Five Pillars. What you paid into the National Treasury stays with the nation.'}
           </p>
@@ -338,7 +338,7 @@ function Overview({ hub, state, onLeft }: { hub: ClanHubResponse; state: HubStat
         confirmLabel={isLeader ? 'Dissolve the nation' : 'Leave the nation'}
       >
         {isLeader ? (
-          <p>The nation will cease to exist. Its provinces go back to the local warriors, its armies disband and its treasury is lost. This cannot be undone.</p>
+          <p>The nation will cease to exist. Its provinces go back to the local militia, its armies disband and its treasury is lost. This cannot be undone.</p>
         ) : (
           <p>You will lose your role and your access to the nation&apos;s land, armies, treasury and channel. You can join another nation or found your own at once.</p>
         )}

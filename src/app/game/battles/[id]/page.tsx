@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { BattleDetailResponse } from '@/game/api';
 import { OUTCOME_LABEL, WEATHER_INFO, type BattleResult, type BattleRound, type BattleSide } from '@/game/battle';
-import { TERRAIN_INFO, UNITS, UNIT_TYPES, totalUnits, type UnitCounts } from '@/game/config';
+import { BUILDINGS, TERRAIN_INFO, UNITS, UNIT_TYPES, totalUnits, type UnitCounts } from '@/game/config';
 import { StrategyReport } from '@/components/StrategyReport';
 import { tacticName } from '@/components/strategy';
 import { Countdown, ErrorState, LoadingState, Panel } from '@/components/ui';
@@ -60,7 +60,7 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
             {b.attackerName} against {b.defenderName}
           </p>
           {b.status === 'cancelled' ? (
-            <p className="mt-4 text-sm">The battle was called off before blades were drawn — the province changed hands or the war ended first.</p>
+            <p className="mt-4 text-sm">The battle was called off before a shot was fired — the province changed hands or the war ended first.</p>
           ) : (
             <>
               <p className="mt-5 text-sm uppercase tracking-[0.15em] text-ink-600">The outcome will be known in</p>
@@ -123,7 +123,7 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
           <Condition label="Terrain" value={terrain.name} note={terrain.note} extra={terrain.defense > 1 ? `Defender +${fmtPct(terrain.defense - 1)}` : 'No advantage'} />
           <Condition label="Weather" value={w.name} note={w.note} />
           <Condition
-            label="Castle"
+            label={BUILDINGS.castle.name}
             value={`Level ${inputs.province.castleLevel}`}
             note={inputs.attacker.mods.siege > 0 ? `Siege skill ignored ${fmtPct(Math.min(1, inputs.attacker.mods.siege))} of the walls.` : 'Walls at full strength.'}
             extra={`Defender +${fmtPct(result.castleBonus)}`}

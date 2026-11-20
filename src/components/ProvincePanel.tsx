@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { ClanPublicDTO, EspionageResponse, ProvinceDetailResponse } from '@/game/api';
-import { BUILDINGS, BUILDING_EFFECTS, RESOURCE_INFO, RESOURCE_KEYS, TERRAIN_INFO, armyPower, totalUnits } from '@/game/config';
+import { BUILDINGS, BUILDING_EFFECTS, RESOURCE_INFO, RESOURCE_KEYS, TERRAIN_INFO, UNITS, armyPower, totalUnits } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
 import { apiPost } from '@/lib/api';
 import { EVENTS } from '@/lib/events';
@@ -103,7 +103,7 @@ export function ProvincePanel({
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate font-display font-bold">{owner ? owner.name : 'No nation rules here'}</div>
             <div className="truncate text-xs text-muted">
-              {owner ? (owner.isNpc ? `${owner.daimyoName} · rival government` : `[${owner.tag}] · led by ${owner.playerNickname ?? owner.daimyoName}`) : 'Held by local warriors'}
+              {owner ? (owner.isNpc ? `${owner.daimyoName} · rival government` : `[${owner.tag}] · led by ${owner.playerNickname ?? owner.daimyoName}`) : 'Held by local militia'}
             </div>
           </div>
         </div>
@@ -118,7 +118,7 @@ export function ProvincePanel({
         {/* facts */}
         <dl className="grid grid-cols-3 gap-2 text-center">
           <Fact label="Population" value={fmt(p.population)} />
-          <Fact label="Castle" value={`Lv ${p.castleLevel}`} />
+          <Fact label={BUILDINGS.castle.name} value={`Lv ${p.castleLevel}`} />
           <Fact label="Defense" value={`+${fmtPct(terrain.defense * (1 + p.castleLevel * BUILDING_EFFECTS.castleDefensePerLevel) - 1)}`} hint="terrain + walls" />
         </dl>
 
@@ -177,7 +177,7 @@ export function ProvincePanel({
                   <TimedProgress key={b.type} from={b.upgrading!.startedAt} to={b.upgrading!.completesAt} label={`${BUILDINGS[b.type].name} → level ${b.upgrading!.toLevel}`} onDone={() => void state.refresh()} />
                 ))}
                 {own.recruitment.map((r) => (
-                  <TimedProgress key={r.id} from={r.startedAt} to={r.completesAt} label={`Mustering ${fmt(r.count)} ${r.unitType}`} onDone={() => void state.refresh()} />
+                  <TimedProgress key={r.id} from={r.startedAt} to={r.completesAt} label={`Mustering ${fmt(r.count)} ${UNITS[r.unitType].name}`} onDone={() => void state.refresh()} />
                 ))}
               </section>
             ) : null}
@@ -208,7 +208,7 @@ export function ProvincePanel({
                   </div>
                   <UnitsRow units={intel.units} />
                   <p className="num mt-1.5 text-sm">
-                    {fmt(totalUnits(intel.units))} soldiers · {fmt(intel.power)} power · castle level {intel.castleLevel} · loyalty {Math.round(intel.loyalty)}
+                    {fmt(totalUnits(intel.units))} soldiers · {fmt(intel.power)} power · {BUILDINGS.castle.name.toLowerCase()} level {intel.castleLevel} · loyalty {Math.round(intel.loyalty)}
                   </p>
                   {intel.stance && STANCE_DEFS[intel.stance] ? (
                     <p className="mt-1.5 border-t border-ink-900/20 pt-1.5 text-sm">

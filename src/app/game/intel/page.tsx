@@ -33,7 +33,7 @@ export default function IntelPage() {
 
   return (
     <div>
-      <PageHeader kanji="忍" title="Intelligence" subtitle="Count the enemy's spears before you draw your own. Reports grow stale, and scouts can be caught." />
+      <PageHeader kanji="忍" title="Intelligence" subtitle="Count the enemy's rifles before you commit your own. Reports grow stale, and scouts can be caught." />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5">
         <div className="space-y-4 lg:space-y-5">
@@ -121,7 +121,7 @@ export default function IntelPage() {
                         <span className={chip.cls}>{chip.label}</span>
                       </span>
                       <span className="mt-0.5 block text-xs text-muted">
-                        {owner ? owner.name : 'Local warriors'} · {p.strength ? p.strength.label : 'strength unknown'}
+                        {owner ? owner.name : 'Local militia'} · {p.strength ? p.strength.label : 'strength unknown'}
                       </span>
                     </span>
                     <ActionButton size="sm" onClick={() => setTarget(p)} reason={pendingTargets.has(p.id) ? 'Scout abroad' : inReach(p) ? null : 'Beyond your borders'}>
@@ -213,7 +213,7 @@ function ReportCard({ op, report, onExpire }: { op: EspionageOpDTO; report: Inte
       <div className="mt-2.5">
         <UnitsRow units={report.units} />
         <p className="num mt-1.5 text-sm">
-          {fmt(totalUnits(report.units))} soldiers · <strong>{fmt(report.power)} power</strong> · castle Lv {report.castleLevel} · loyalty {Math.round(report.loyalty)}
+          {fmt(totalUnits(report.units))} soldiers · <strong>{fmt(report.power)} power</strong> · {BUILDINGS.castle.name.toLowerCase()} Lv {report.castleLevel} · loyalty {Math.round(report.loyalty)}
         </p>
       </div>
       {report.stance && STANCE_DEFS[report.stance] ? (

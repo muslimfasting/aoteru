@@ -314,7 +314,7 @@ function PlanDetail({ plan, council, busy, mutate, onEdit }: { plan: WarPlanDTO;
               {open ? <span className={relation.chip}>{relation.label}</span> : null}
               <span className="w-full text-xs text-muted">
                 {/* Who holds it matters while the plan is open; afterwards the land may have changed hands again. */}
-                {open ? (plan.targetOwnerName ? `Held by ${plan.targetOwnerName}` : 'Held by local warriors') : null}
+                {open ? (plan.targetOwnerName ? `Held by ${plan.targetOwnerName}` : 'Held by local militia') : null}
                 {open && target ? ' · ' : ''}
                 {target ? TERRAIN_INFO[target.terrain].name : ''}
               </span>
@@ -891,7 +891,7 @@ function PlanEditor({
                           <span className="min-w-0 flex-1 leading-tight">
                             <span className="block truncate font-display font-bold">{t.name}</span>
                             <span className="block truncate text-xs text-muted">
-                              {t.ownerName ?? 'Local warriors'} · {TERRAIN_INFO[t.terrain].name}
+                              {t.ownerName ?? 'Local militia'} · {TERRAIN_INFO[t.terrain].name}
                             </span>
                           </span>
                         </button>

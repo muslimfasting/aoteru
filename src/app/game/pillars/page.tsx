@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { MeResponse, PillarDTO, PillarsResponse, SkillStateDTO } from '@/game/api';
-import { RESOURCE_INFO, RESOURCE_KEYS } from '@/game/config';
+import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS } from '@/game/config';
 import { BRANCH_NAMES, MAX_PILLAR_LEVEL, PILLARS, PILLAR_DEFS, SKILLS, SKILL_BY_CODE, type ModifierKey, type Modifiers, type PillarId, type SkillDef } from '@/game/pillars';
 import { PlayerLink } from '@/components/clan';
 import { ActionButton, Bar, CostRow, ErrorState, LoadingState, PageHeader, Panel } from '@/components/ui';
@@ -21,7 +21,7 @@ const MOD_LABELS: Record<ModifierKey, { label: string; kind: 'pct' | 'flat'; sig
   infantry: { label: 'Infantry damage', kind: 'pct' },
   ranged: { label: 'Ranged damage', kind: 'pct' },
   cavalry: { label: 'Cavalry damage', kind: 'pct' },
-  siege: { label: 'Castle defense ignored', kind: 'pct' },
+  siege: { label: `${BUILDINGS.castle.name} defense ignored`, kind: 'pct' },
   marchSpeed: { label: 'March speed', kind: 'pct' },
   capacity: { label: 'Army capacity', kind: 'flat' },
   morale: { label: 'Starting morale', kind: 'flat' },

@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import type { MeResponse, WorldMapResponse } from '@/game/api';
 import { CLAN_LANGUAGES, CLAN_RULES, RECRUITMENT_DEFS, RECRUITMENT_MODES, ROLE_DEFS, type RecruitmentMode } from '@/game/clan';
-import { BANNER_COLORS, BANNER_MONS, NAME_RULES, PORTRAITS, RESOURCE_INFO, RESOURCE_KEYS, TERRAIN_INFO, WORLD } from '@/game/config';
+import { BANNER_COLORS, BANNER_MONS, BUILDINGS, NAME_RULES, PORTRAITS, RESOURCE_INFO, RESOURCE_KEYS, TERRAIN_INFO, UNITS, WORLD } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
 import { FormField } from '@/components/AuthShell';
 import { Banner, MonBadge } from '@/components/Banner';
@@ -385,7 +385,8 @@ export default function FoundPage() {
             The nation&apos;s capital
           </h2>
           <p className="mb-3 text-sm text-muted">
-            Provinces marked <span className="font-bold text-vermilion-bright">+</span> are open. The nation begins with a castle, a farm, {WORLD.startingGarrison.ashigaru} ashigaru and {WORLD.startingGarrison.yari} yari, and{' '}
+            Provinces marked <span className="font-bold text-vermilion-bright">+</span> are open. The nation begins with a {BUILDINGS.castle.name.toLowerCase()}, a {BUILDINGS.farm.name.toLowerCase()}, {WORLD.startingGarrison.ashigaru} {UNITS.ashigaru.name.toLowerCase()} and{' '}
+            {WORLD.startingGarrison.yari} {UNITS.yari.name.toLowerCase()}, and{' '}
             {WORLD.protectionHours} game hours of protection.
           </p>
           {map.error && !map.data ? (
@@ -395,7 +396,7 @@ export default function FoundPage() {
           ) : slots.length === 0 ? (
             <div className="paper p-5 text-center">
               <p className="font-display text-xl font-bold">The realm is full</p>
-              <p className="mt-1 text-sm">Every open province has been claimed. A place will open when one falls back to the local warriors — check again soon.</p>
+              <p className="mt-1 text-sm">Every open province has been claimed. A place will open when one falls back to the local militia — check again soon.</p>
               <button type="button" className="btn btn-ink mt-3" onClick={() => void map.refresh()}>
                 Look again
               </button>

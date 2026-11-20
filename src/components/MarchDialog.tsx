@@ -221,7 +221,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
           }}
         />
       ) : !army.data || !map.data ? (
-        <LoadingState label="Counting spears…" />
+        <LoadingState label="Counting rifles…" />
       ) : garrisons.length === 0 ? (
         <ErrorState message="You have no soldiers stationed anywhere. Recruit at a Barracks first." />
       ) : confirming ? (
@@ -342,7 +342,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
                     </span>
                   </p>
                 ) : isAttack && dest ? (
-                  <p className="mt-1 text-sm text-ink-600">Defenders: unknown. Send a scout first to count their spears.</p>
+                  <p className="mt-1 text-sm text-ink-600">Defenders: unknown. Send a scout first to count their rifles.</p>
                 ) : null}
                 {isAttack && tactics.length > 0 ? <KnownStanceNote known={preview.knownStance} tactic={tactic} paper className="mt-2 border-t border-ink-600/20 pt-2" /> : null}
               </>
