@@ -34,9 +34,9 @@ export async function createWorld(tx: Db, now: Date): Promise<WorldStateRow> {
   for (const npc of NPC_CLANS) {
     const clan = await one<{ id: string }>(
       tx,
-      `INSERT INTO clans (npc_key, name, daimyo_name, portrait, banner_color, banner_mon, is_npc, personality, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8) RETURNING id`,
-      [npc.key, npc.name, npc.daimyoName, npc.portrait, npc.bannerColor, npc.bannerMon, npc.personality, now],
+      `INSERT INTO clans (npc_key, name, daimyo_name, portrait, banner_color, banner_mon, is_npc, personality, created_at, tag, recruitment)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, 'closed') RETURNING id`,
+      [npc.key, npc.name, npc.daimyoName, npc.portrait, npc.bannerColor, npc.bannerMon, npc.personality, now, npc.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase()],
     );
     clanIds.set(npc.key, clan!.id);
     await tx.query('INSERT INTO resources (clan_id, gold, food, wood, stone, iron, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [

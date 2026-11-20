@@ -9,6 +9,7 @@
  * Errors use `ApiErrorBody` with a 4xx/5xx status.
  */
 import type { BattleInputs, BattleOutcome, BattleResult, Weather } from './battle';
+import type { ClanPermission, ClanRole, RecruitmentMode } from './clan';
 import type { BuildingType, ResourceBag, Terrain, UnitCounts, UnitType } from './config';
 import type { Modifiers, PillarId } from './pillars';
 
@@ -56,8 +57,16 @@ export interface ClanPublicDTO {
   portrait: string;
   banner: BannerDTO;
   isNpc: boolean;
+  /** Nickname of the clan's leader; null for NPC clans. */
   playerNickname: string | null;
-  status: 'active' | 'fallen';
+  /** Short tag shown beside member names, e.g. "ODA". */
+  tag: string;
+  description: string;
+  recruitment: RecruitmentMode;
+  /** id from CLAN_LANGUAGES */
+  language: string;
+  memberCount: number;
+  status: 'active' | 'fallen' | 'disbanded';
   provinceCount: number;
   capitalProvinceId: string | null;
   /** While set and in the future, the clan cannot be attacked. */
@@ -90,15 +99,55 @@ export interface PlayerDTO {
   id: string;
   nickname: string;
   email: string;
+  /** id from PORTRAITS */
+  portrait: string;
   createdAt: string;
+}
+
+/** The viewer's place in their clan. */
+export interface MembershipDTO {
+  clanId: string;
+  role: ClanRole;
+  roleName: string;
+  /** What the role may do right now. Buttons for anything else should be hidden or disabled. */
+  permissions: ClanPermission[];
+  joinedAt: string;
+}
+
+/** The viewer's personal economy and standing (they keep these when changing clan). */
+export interface PersonalDTO {
+  purse: ResourceBag;
+  residenceLevel: number;
+  maxResidenceLevel: number;
+  /** Paid every game hour while the clan holds land. */
+  residenceIncome: ResourceBag;
+  /** False when the player has no clan, or the clan holds no land: no income is paid. */
+  incomeActive: boolean;
+  /** null at the maximum level. */
+  nextResidenceCost: ResourceBag | null;
+  /** The pillar trained at home (a little experience every game hour). */
+  trainingFocus: PillarId;
+  trainingXpPerHour: number;
+  /** Overall level: sum of pillar levels above the first, plus one. */
+  level: number;
+  reputation: number;
+  battlesLed: number;
+  battlesWon: number;
 }
 
 /** GET /api/player/me */
 export interface MeResponse {
   player: PlayerDTO;
+  /** The clan the viewer belongs to (its treasury, income and army are shared by all members). */
   clan: ClanSelfDTO | null;
+  membership: MembershipDTO | null;
+  personal: PersonalDTO;
   world: WorldMetaDTO;
   unreadNotifications: number;
+  /** Unread private messages plus unread clan chat. */
+  unreadMessages: number;
+  /** Invitations to join a clan waiting for an answer. */
+  pendingInvitations: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,8 +448,26 @@ export interface SkillStateDTO {
 export interface PillarsResponse {
   pillars: PillarDTO[];
   skills: SkillStateDTO[];
-  /** Sum of everything the pillars and skills currently grant. */
+  /** What the viewer's own pillars and skills would grant if they carried every pillar. */
   modifiers: Modifiers;
+  /**
+   * The clan's council: each pillar is carried for the whole clan by the
+   * strongest of the leader and the member holding that pillar's seat. Null
+   * when the viewer has no clan.
+   */
+  council: {
+    /** What the clan actually fights, builds and scouts with. */
+    modifiers: Modifiers;
+    seats: {
+      pillar: PillarId;
+      seatRole: ClanRole;
+      seatName: string;
+      playerId: string | null;
+      nickname: string | null;
+      level: number;
+      isYou: boolean;
+    }[];
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -469,8 +536,27 @@ export interface LeaderboardEntryDTO {
 }
 
 /** GET /api/leaderboard */
+export interface PlayerRankDTO {
+  rank: number;
+  playerId: string;
+  nickname: string;
+  portrait: string;
+  clanId: string | null;
+  clanName: string | null;
+  clanTag: string | null;
+  roleName: string | null;
+  level: number;
+  contribution: number;
+  battlesWon: number;
+  reputation: number;
+  score: number;
+  isViewer: boolean;
+}
 export interface LeaderboardResponse {
+  /** Clan ranking. */
   entries: LeaderboardEntryDTO[];
+  /** Individual ranking. */
+  players: PlayerRankDTO[];
 }
 
 export interface NotificationDTO {
@@ -491,19 +577,195 @@ export interface NotificationsResponse {
   unread: number;
 }
 
+export type ChatChannel = 'world' | 'clan' | 'dm';
 export interface ChatMessageDTO {
   id: number;
+  channel: ChatChannel;
+  /** Sender. */
+  playerId: string | null;
   clanId: string | null;
   clanName: string;
+  clanTag: string | null;
   nickname: string;
+  portrait: string | null;
   bannerColor: string;
   body: string;
   createdAt: string;
+  mine: boolean;
+}
+/**
+ * GET /api/chat?channel=world | GET /api/chat?channel=clan | GET /api/chat?channel=dm&with=<playerId>
+ * Reading the clan channel or a private thread marks it read.
+ */
+export interface ChatResponse {
+  channel: ChatChannel;
+  messages: ChatMessageDTO[];
+  /** For a private thread: the other player. */
+  with: PlayerCardDTO | null;
+}
+export interface PlayerCardDTO {
+  playerId: string;
+  nickname: string;
+  portrait: string;
+  clanId: string | null;
+  clanName: string | null;
+  clanTag: string | null;
+  bannerColor: string | null;
+  roleName: string | null;
+  level: number;
+}
+export interface ChatThreadDTO {
+  with: PlayerCardDTO;
+  lastMessage: { body: string; createdAt: string; mine: boolean };
+  unread: number;
+}
+/** GET /api/chat/threads — private conversations, newest first, and unread counts. */
+export interface ChatThreadsResponse {
+  threads: ChatThreadDTO[];
+  /** Unread messages in the clan channel (0 without a clan). */
+  clanUnread: number;
+  hasClan: boolean;
+}
+/** GET /api/players?search=<text> — find players to message or invite. */
+export interface PlayerSearchResponse {
+  players: PlayerCardDTO[];
+}
+/** GET /api/players/:id */
+export interface PlayerProfileResponse {
+  player: PlayerCardDTO;
+  pillars: Record<PillarId, number>;
+  reputation: number;
+  battlesLed: number;
+  battlesWon: number;
+  contribution: number;
+  joinedClanAt: string | null;
+  createdAt: string;
+  isViewer: boolean;
+  /** The viewer may invite this player into their clan. */
+  canInvite: boolean;
 }
 
-/** GET /api/chat */
-export interface ChatResponse {
-  messages: ChatMessageDTO[];
+// ---------------------------------------------------------------------------
+// Clans: discovery, profile, management, treasury (change request §2, §4)
+// ---------------------------------------------------------------------------
+/** What the viewer can do about joining a clan. */
+export type JoinOption = 'join' | 'apply' | 'accept_invitation' | 'applied' | null;
+export interface ClanJoinStateDTO {
+  option: JoinOption;
+  /** Why the viewer cannot join (already in a clan, full, closed, ...), or null. */
+  blockedReason: string | null;
+  applicationId: string | null;
+  invitationId: string | null;
+}
+export interface ClanDirectoryEntryDTO {
+  clan: ClanPublicDTO;
+  /** 0 for clans without land. */
+  rank: number;
+  /** Region of the clan's headquarters. */
+  regionName: string | null;
+  join: ClanJoinStateDTO;
+  isViewer: boolean;
+}
+export interface ClanInvitationDTO {
+  id: string;
+  clan: ClanPublicDTO;
+  playerId: string;
+  nickname: string;
+  invitedBy: string | null;
+  createdAt: string;
+}
+export interface ClanApplicationDTO {
+  id: string;
+  clanId: string;
+  clanName: string;
+  player: PlayerCardDTO;
+  message: string;
+  createdAt: string;
+}
+/** GET /api/clans */
+export interface ClanDirectoryResponse {
+  entries: ClanDirectoryEntryDTO[];
+  /** Invitations the viewer has received. */
+  invitations: ClanInvitationDTO[];
+  /** Applications the viewer has sent that are still waiting. */
+  applications: ClanApplicationDTO[];
+  viewerClanId: string | null;
+  maxMembers: number;
+}
+export interface ClanMemberDTO {
+  playerId: string;
+  nickname: string;
+  portrait: string;
+  role: ClanRole;
+  roleName: string;
+  joinedAt: string;
+  /** Weighted value of everything paid into the treasury. */
+  contribution: number;
+  level: number;
+  pillars: Record<PillarId, number>;
+  /** Pillars this member currently carries for the clan. */
+  carries: PillarId[];
+  isYou: boolean;
+  /** The viewer may change this member's role or remove them. */
+  canManage: boolean;
+}
+/** GET /api/clans/:id — public profile of any clan. */
+export interface ClanProfileResponse {
+  clan: ClanPublicDTO;
+  rank: number;
+  regionName: string | null;
+  members: ClanMemberDTO[];
+  provinces: { id: string; name: string; isCapital: boolean }[];
+  join: ClanJoinStateDTO;
+  isMember: boolean;
+}
+export interface ClanActivityDTO {
+  id: number;
+  /** joined, left, removed, role, leadership, invited, contribution, withdrawal, settings, permissions, announcement */
+  type: string;
+  body: string;
+  createdAt: string;
+}
+export interface TreasuryEntryDTO {
+  id: number;
+  resource: string;
+  /** Positive: into the treasury. Negative: out of it. */
+  amount: number;
+  balanceAfter: number;
+  /** e.g. member_contribution, treasury_withdrawal, building_upgrade, recruitment, production, upkeep */
+  reason: string;
+  /** Member who caused it; null for the simulation (production, upkeep). */
+  actor: string | null;
+  createdAt: string;
+}
+export interface ContributionDTO {
+  playerId: string;
+  nickname: string;
+  points: number;
+  resources: ResourceBag;
+}
+/** GET /api/clan — everything about the viewer's own clan. Returned by every clan-management mutation. */
+export interface ClanHubResponse {
+  clan: ClanSelfDTO;
+  membership: MembershipDTO;
+  personal: PersonalDTO;
+  announcement: { body: string; by: string | null; at: string } | null;
+  members: ClanMemberDTO[];
+  /** Waiting applications. Empty unless the viewer holds `manage_members`. */
+  applications: ClanApplicationDTO[];
+  /** Invitations the clan has sent that are still open. */
+  invitations: ClanInvitationDTO[];
+  /** What each role may do in this clan. */
+  permissions: Record<ClanRole, ClanPermission[]>;
+  activity: ClanActivityDTO[];
+  treasury: {
+    /** Latest movements, newest first. */
+    log: TreasuryEntryDTO[];
+    contributions: ContributionDTO[];
+  };
+  maxMembers: number;
+  /** The clan has lost all its land; the leader must found a new seat. */
+  fallen: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +792,14 @@ export type RealtimeEventName =
   | 'espionage:completed'
   | 'pillars:updated'
   | 'notification:new'
-  | 'chat:message';
+  /** payload: { id, channel, with? } — `with` is the other player of a private thread. */
+  | 'chat:message'
+  /** The viewer's clan or their membership changed: reload /api/player/me and /api/clan. */
+  | 'clan:updated'
+  /** A clan was founded, dissolved or changed its public profile: reload /api/clans. */
+  | 'clan:directory'
+  /** payload: { purse } */
+  | 'purse:updated';
 
 export interface RealtimeEventDTO {
   id: number;
@@ -545,8 +814,11 @@ export interface SyncResponse {
   cursor: number;
   events: RealtimeEventDTO[];
   world: WorldMetaDTO;
+  /** Clan treasury. */
   resources: ResourceBag | null;
+  purse: ResourceBag;
   unreadNotifications: number;
+  unreadMessages: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +845,12 @@ export interface AuthResponse {
 /** POST /api/clans → MeResponse */
 export interface CreateClanRequest {
   clanName: string;
+  /** 2-5 letters or numbers, unique. */
+  tag: string;
+  description?: string;
+  recruitment?: RecruitmentMode;
+  language?: string;
+  /** Name the leader is known by. */
   daimyoName: string;
   portrait: string;
   bannerColor: string;
@@ -636,5 +914,81 @@ export interface MarkReadRequest {
 
 /** POST /api/chat → { message: ChatMessageDTO } */
 export interface ChatRequest {
+  /** Defaults to 'world'. */
+  channel?: ChatChannel;
+  /** Recipient player id, for channel 'dm'. */
+  to?: string;
   body: string;
+}
+/** POST /api/chat/read → ChatThreadsResponse. `thread` is 'clan' or the other player's id. */
+export interface ChatReadRequest {
+  thread: string;
+}
+/** POST /api/clans/:id/join → MeResponse (open clans). */
+/** POST /api/clans/:id/apply → ClanDirectoryResponse */
+export interface ApplyRequest {
+  message?: string;
+}
+/** POST /api/clan/applications → ClanHubResponse (needs manage_members) */
+export interface AnswerApplicationRequest {
+  applicationId: string;
+  accept: boolean;
+}
+/** POST /api/clan/applications/withdraw → ClanDirectoryResponse */
+export interface WithdrawApplicationRequest {
+  applicationId: string;
+}
+/** POST /api/clan/invitations → ClanHubResponse (needs manage_members) */
+export interface InviteRequest {
+  nickname: string;
+}
+/** POST /api/clan/invitations/revoke → ClanHubResponse */
+export interface RevokeInvitationRequest {
+  invitationId: string;
+}
+/** POST /api/clan/invitations/respond → MeResponse */
+export interface AnswerInvitationRequest {
+  invitationId: string;
+  accept: boolean;
+}
+/** POST /api/clan/leave → MeResponse */
+/** POST /api/clan/members/role → ClanHubResponse (needs manage_members; only below your own rank) */
+export interface SetRoleRequest {
+  playerId: string;
+  role: ClanRole;
+}
+/** POST /api/clan/members/kick and POST /api/clan/members/transfer → ClanHubResponse */
+export interface MemberRequest {
+  playerId: string;
+}
+/** POST /api/clan/settings → ClanHubResponse (needs manage_clan) */
+export interface ClanSettingsRequest {
+  description?: string;
+  recruitment?: RecruitmentMode;
+  language?: string;
+}
+/** POST /api/clan/permissions → ClanHubResponse (leader only) */
+export interface SetPermissionsRequest {
+  role: ClanRole;
+  permissions: ClanPermission[];
+}
+/** POST /api/clan/announcement → ClanHubResponse (needs manage_clan). An empty body clears it. */
+export interface AnnouncementRequest {
+  body: string;
+}
+/** POST /api/clan/contribute → ClanHubResponse. Moves resources from the viewer's purse to the treasury. */
+export interface ContributeRequest {
+  resources: Partial<ResourceBag>;
+}
+/** POST /api/clan/withdraw → ClanHubResponse (needs treasury). Pays treasury resources to a member's purse. */
+export interface WithdrawRequest {
+  playerId: string;
+  resources: Partial<ResourceBag>;
+  note?: string;
+}
+/** POST /api/player/residence → MeResponse. Upgrades the residence by one level from the purse. */
+/** POST /api/player/profile → MeResponse */
+export interface ProfileRequest {
+  portrait?: string;
+  trainingFocus?: PillarId;
 }

@@ -3,7 +3,7 @@ import { one, rows, type Db } from './db';
 import { conflict, forbidden, invalid, notFound } from './errors';
 import { clanUnits, spend } from './economy';
 import { audit, chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import { atWar, loadActiveWars, loadArmies, loadMods, type ClanRow, type WarRow } from './rows';
 import { addMs, dayLabel, gameMs, type G } from './world';
 
@@ -83,7 +83,7 @@ async function endWar(g: G, war: WarRow, a: ClanRow, b: ClanRow): Promise<void> 
   });
   for (const clan of [a, b]) {
     const mods = await loadMods(g.tx, clan.id);
-    await awardXp(g, clan.id, 'culture', 60, mods.xpGain);
+    await awardClanXp(g, clan.id, 'culture', 60, mods.xpGain);
   }
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { warId: war.id });
 }

@@ -148,7 +148,7 @@ function Chat({ fullScreen }: { fullScreen?: boolean }) {
     if (res) {
       setBody('');
       stick.current = true;
-      if (state.data && !state.data.messages.some((m) => m.id === res.message.id)) state.setData({ messages: [...state.data.messages, res.message] });
+      if (state.data && !state.data.messages.some((m) => m.id === res.message.id)) state.setData({ ...state.data, messages: [...state.data.messages, res.message] });
     }
   };
 

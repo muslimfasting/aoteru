@@ -7,7 +7,7 @@ import { buildProvince } from '@/server/views';
 export const dynamic = 'force-dynamic';
 
 /** POST /api/buildings/upgrade */
-export const POST = clanRoute({ body: upgradeBody, mutation: true }, async (ctx) => {
-  await act(ctx, (g, clan) => startUpgrade(g, clan.id, ctx.body.provinceId, ctx.body.type));
+export const POST = clanRoute({ body: upgradeBody, mutation: true, permission: 'build' }, async (ctx) => {
+  await act(ctx, (g, clan) => startUpgrade(g, clan.id, ctx.body.provinceId, ctx.body.type), 'build');
   return buildProvince(pool(), ctx.viewer, ctx.body.provinceId, new Date());
 });

@@ -3,7 +3,7 @@ import { one } from './db';
 import { conflict, forbidden, notFound } from './errors';
 import { spend } from './economy';
 import { audit } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import { loadMods, type ClanRow, type ProvinceRow } from './rows';
 import { addMs, gameMs, type G } from './world';
 
@@ -24,6 +24,6 @@ export async function holdFestival(g: G, clan: ClanRow, provinceId: string): Pro
     gain,
     g.now,
   ]);
-  await awardXp(g, clan.id, 'culture', WORLD.festival.cultureXp, mods.xpGain);
+  await awardClanXp(g, clan.id, 'culture', WORLD.festival.cultureXp, mods.xpGain);
   await audit(g, 'province.festival', { type: 'province', id: province.id }, clan.id, { province: province.code, loyalty: gain });
 }

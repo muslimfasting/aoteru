@@ -18,7 +18,7 @@ import { addUnitsToArmy, deleteArmy, ensureGarrison, getGarrison, mergeIntoGarri
 import { one, rows } from './db';
 import { getResources, grant, spend } from './economy';
 import { audit, chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import { atWar, levelsByProvince, loadActiveWars, loadArmies, loadBuildings, loadMods, type ArmyRow, type ClanRow, type ProvinceRow } from './rows';
 import { transferProvince } from './territory';
 import { addMs, dayLabel, gameMs, type G } from './world';
@@ -160,7 +160,7 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
   const garrison = await getGarrison(g.tx, province.id, defenderId);
   const levels = levelsByProvince(await loadBuildings(g.tx, province.id)).get(province.id);
   const castleLevel = levels?.castle ?? province.defense_level;
-  const modsA = await loadMods(g.tx, attacker.id);
+  const modsA = await loadMods(g.tx, attacker.id, army.commander_player_id);
   const modsD = await loadMods(g.tx, defenderId);
 
   // Strategy: a fresh scouting report on the target sharpens the attack.
@@ -252,9 +252,23 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
 
   // Experience for both commanders.
   const attackerWon = result.winner === 'attacker';
-  await awardXp(g, attacker.id, 'military', (20 + defenderLost * 0.5) * (attackerWon ? 1.5 : 1) + (captured ? 60 : 0), modsA.xpGain);
-  if (captured) await awardXp(g, attacker.id, 'leadership', 80, modsA.xpGain);
-  if (defenderId) await awardXp(g, defenderId, 'military', (15 + attackerLost * 0.5) * (result.winner === 'defender' ? 1.5 : 1), modsD.xpGain);
+  await awardClanXp(
+    g,
+    attacker.id,
+    'military',
+    (20 + defenderLost * 0.5) * (attackerWon ? 1.5 : 1) + (captured ? 60 : 0),
+    modsA.xpGain,
+    army.commander_player_id,
+  );
+  if (captured) await awardClanXp(g, attacker.id, 'leadership', 80, modsA.xpGain, null);
+  if (defenderId) await awardClanXp(g, defenderId, 'military', (15 + attackerLost * 0.5) * (result.winner === 'defender' ? 1.5 : 1), modsD.xpGain, null);
+  if (army.commander_player_id) {
+    await g.tx.query('UPDATE players SET battles_led = battles_led + 1, battles_won = battles_won + $2, reputation = reputation + $3 WHERE id = $1', [
+      army.commander_player_id,
+      attackerWon ? 1 : 0,
+      attackerWon ? (captured ? 5 : 2) : 0,
+    ]);
+  }
 
   const label = OUTCOME_LABEL[result.outcome];
   const defenderName = inputs.defender.name;

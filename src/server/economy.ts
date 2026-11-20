@@ -30,8 +30,10 @@ export interface LedgerRef {
   id: string | null;
 }
 
+type Ctx = Pick<G, 'tx' | 'now'> & { actorPlayerId?: string | null };
+
 async function writeLedger(
-  g: Pick<G, 'tx' | 'now'>,
+  g: Ctx,
   clanId: string,
   deltas: Partial<ResourceBag>,
   after: ResourceBag,
@@ -44,12 +46,12 @@ async function writeLedger(
     const amount = deltas[k] ?? 0;
     if (amount === 0) continue;
     const i = values.length;
-    values.push(clanId, k, amount, after[k], reason, ref?.type ?? null, ref?.id ?? null, g.now);
-    tuples.push(`($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7}, $${i + 8})`);
+    values.push(clanId, k, amount, after[k], reason, ref?.type ?? null, ref?.id ?? null, g.now, g.actorPlayerId ?? null);
+    tuples.push(`($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7}, $${i + 8}, $${i + 9})`);
   }
   if (tuples.length === 0) return;
   await g.tx.query(
-    `INSERT INTO transactions (clan_id, resource, amount, balance_after, reason, ref_type, ref_id, created_at) VALUES ${tuples.join(', ')}`,
+    `INSERT INTO transactions (clan_id, resource, amount, balance_after, reason, ref_type, ref_id, created_at, actor_player_id) VALUES ${tuples.join(', ')}`,
     values,
   );
 }
@@ -66,7 +68,7 @@ function cleanCost(cost: Partial<ResourceBag>): ResourceBag {
  * the CHECK constraints make a negative balance impossible.
  */
 export async function spend(
-  g: Pick<G, 'tx' | 'now'>,
+  g: Ctx,
   clanId: string,
   cost: Partial<ResourceBag>,
   reason: string,
@@ -95,7 +97,7 @@ export async function spend(
 
 /** Add resources (production, rewards, loot). */
 export async function grant(
-  g: Pick<G, 'tx' | 'now'>,
+  g: Ctx,
   clanId: string,
   bag: Partial<ResourceBag>,
   reason: string,
@@ -122,7 +124,7 @@ export async function grant(
  * go below zero is clamped to zero; the returned `shortfall` says by how much.
  */
 export async function applyHourly(
-  g: Pick<G, 'tx' | 'now'>,
+  g: Ctx,
   clanId: string,
   entries: { reason: string; deltas: Partial<ResourceBag> }[],
   ref: LedgerRef,

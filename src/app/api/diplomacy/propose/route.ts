@@ -7,7 +7,7 @@ import { buildDiplomacy } from '@/server/views';
 export const dynamic = 'force-dynamic';
 
 /** POST /api/diplomacy/propose */
-export const POST = clanRoute({ body: proposeBody, mutation: true }, async (ctx) => {
-  await act(ctx, (g, clan) => proposePeace(g, clan, ctx.body.clanId));
+export const POST = clanRoute({ body: proposeBody, mutation: true, permission: 'diplomacy' }, async (ctx) => {
+  await act(ctx, (g, clan) => proposePeace(g, clan, ctx.body.clanId), 'diplomacy');
   return buildDiplomacy(pool(), ctx.clan, new Date());
 });

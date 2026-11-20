@@ -9,7 +9,7 @@ import { one, rows, type Db } from './db';
 import { conflict, invalid, notFound } from './errors';
 import { getResources, spend } from './economy';
 import { audit, emitClan, notifyClan } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import { levelsByProvince, loadBuildings, loadMods, type ClanRow, type ProvinceRow } from './rows';
 import { addMs, gameMs, type G } from './world';
 
@@ -103,7 +103,7 @@ export async function resolveEspionage(g: G, opId: string): Promise<void> {
     [opId, success ? 'success' : 'failed', detected, g.now, report ? JSON.stringify(report) : null, expiresAt],
   );
 
-  await awardXp(g, clan.id, 'intelligence', success ? 25 : 8, mods.xpGain);
+  await awardClanXp(g, clan.id, 'intelligence', success ? 25 : 8, mods.xpGain);
   await notifyClan(g, clan.id, {
     type: 'espionage',
     title: success ? `Scouts return from ${province.name}` : `Scouts lost in ${province.name}`,
@@ -116,7 +116,7 @@ export async function resolveEspionage(g: G, opId: string): Promise<void> {
 
   if (detected && province.owner_clan_id && province.owner_clan_id !== clan.id) {
     const theirs = await loadMods(g.tx, province.owner_clan_id);
-    await awardXp(g, province.owner_clan_id, 'intelligence', 15, theirs.xpGain);
+    await awardClanXp(g, province.owner_clan_id, 'intelligence', 15, theirs.xpGain);
     await notifyClan(g, province.owner_clan_id, {
       type: 'espionage',
       title: `Spies caught in ${province.name}`,

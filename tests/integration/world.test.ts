@@ -20,7 +20,9 @@ process.env.DATABASE_URL = TEST_DB;
 process.env.WORLD_SPEED = '60';
 process.env.CRON_SECRET = 'test-secret';
 
+import type { PlayerDTO } from '@/game/api';
 import { simulateBattle } from '@/game/battle';
+import { CLAN_PERMISSIONS, type ClanPermission, type ClanRole } from '@/game/clan';
 import { WORLD, buildingCost, totalUnits, unitCost, type UnitCounts } from '@/game/config';
 import { advanceWorld } from '@/server/advance';
 import { getGarrison } from '@/server/armies';
@@ -37,7 +39,7 @@ import { dispatchArmy, planMarch, recruit } from '@/server/military';
 import { getPillars, unlockSkill } from '@/server/progression';
 import type { ClanRow, ProvinceRow } from '@/server/rows';
 import { processTick } from '@/server/tick';
-import { buildBattle, buildBattles, buildMap, buildMe, buildProvince, buildSync } from '@/server/views';
+import { buildBattle, buildBattles, buildMap, buildMe, buildProvince, buildSync, type Viewer } from '@/server/views';
 import { gameContext, loadWorldState, type G } from '@/server/world';
 
 // Virtual clock. At speed 60 one game minute is one real second.
@@ -71,11 +73,24 @@ const province = async (code: string) => (await one<ProvinceRow>(db(), 'SELECT *
 const clanOf = async (playerId: string) => (await one<ClanRow>(db(), 'SELECT * FROM clans WHERE player_id = $1', [playerId]))!;
 const count = async (sql: string, params: unknown[] = []) => (await one<{ n: number }>(db(), `SELECT COUNT(*)::int AS n FROM ${sql}`, params))!.n;
 
-interface TestPlayer {
-  id: string;
-  nickname: string;
-  email: string;
-  createdAt: string;
+type TestPlayer = PlayerDTO;
+
+/** The viewer the API would build for this player: their clan and their role in it, read fresh. */
+async function viewerOf(player: TestPlayer): Promise<Viewer> {
+  const m = await one<{ clan_id: string; role: ClanRole; joined_at: Date }>(db(), 'SELECT clan_id, role, joined_at FROM clan_members WHERE player_id = $1', [
+    player.id,
+  ]);
+  if (!m) return { player, clan: null, member: null };
+  const clan = (await one<ClanRow>(db(), 'SELECT * FROM clans WHERE id = $1', [m.clan_id]))!;
+  const perms = await rows<{ permission: ClanPermission }>(db(), 'SELECT permission FROM clan_role_permissions WHERE clan_id = $1 AND role = $2', [
+    m.clan_id,
+    m.role,
+  ]);
+  return {
+    player,
+    clan,
+    member: { clanId: m.clan_id, role: m.role, permissions: m.role === 'leader' ? [...CLAN_PERMISSIONS] : perms.map((x) => x.permission), joinedAt: m.joined_at },
+  };
 }
 let p1: TestPlayer;
 let p2: TestPlayer;
@@ -127,24 +142,24 @@ describe('persistent world', () => {
     const iga = await province('iga');
     const kii = await province('kii');
     await order(p1.id, async (g) => {
-      await createClan(g, p1, null, { clanName: 'Uesugi', daimyoName: 'Kagetora', portrait: 'general', bannerColor: 'crimson', bannerMon: 'tomoe', provinceId: iga.id });
+      await createClan(g, p1, { clanName: 'Uesugi', tag: 'UES', daimyoName: 'Kagetora', portrait: 'general', bannerColor: 'crimson', bannerMon: 'tomoe', provinceId: iga.id });
     });
     // The same province, and the same banner colour, cannot be taken twice.
     await expectRefused(
-      order(p2.id, (g) => createClan(g, p2, null, { clanName: 'Takeda', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: iga.id })),
+      order(p2.id, (g) => createClan(g, p2, { clanName: 'Takeda', tag: 'TAK', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: iga.id })),
       'PROVINCE_TAKEN',
     );
     await expectRefused(
-      order(p2.id, (g) => createClan(g, p2, null, { clanName: 'Takeda', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'crimson', bannerMon: 'peaks', provinceId: kii.id })),
+      order(p2.id, (g) => createClan(g, p2, { clanName: 'Takeda', tag: 'TAK', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'crimson', bannerMon: 'peaks', provinceId: kii.id })),
       'BANNER_TAKEN',
     );
     await expectRefused(
-      order(p2.id, (g) => createClan(g, p2, null, { clanName: 'uesugi', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: kii.id })),
+      order(p2.id, (g) => createClan(g, p2, { clanName: 'uesugi', tag: 'UES', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: kii.id })),
       'CLAN_NAME_TAKEN',
     );
     // A refused founding leaves nothing behind.
     expect(await count('clans WHERE player_id = $1', [p2.id])).toBe(0);
-    await order(p2.id, (g) => createClan(g, p2, null, { clanName: 'Takeda', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: kii.id }));
+    await order(p2.id, (g) => createClan(g, p2, { clanName: 'Takeda', tag: 'TAK', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: kii.id }));
 
     const clan = await clanOf(p1.id);
     expect((await province('iga')).owner_clan_id).toBe(clan.id);
@@ -153,12 +168,12 @@ describe('persistent world', () => {
     expect(await getResources(db(), clan.id)).toEqual(WORLD.startingResources);
     expect(totalUnits((await getGarrison(db(), iga.id, clan.id))!.units)).toBe(110);
     expect(await getGarrison(db(), iga.id, null)).toBeNull();
-    expect(await count('five_pillars WHERE clan_id = $1', [clan.id])).toBe(5);
+    expect(await count('player_pillars WHERE player_id = $1', [p1.id])).toBe(5);
     expect(await count(`province_ownership_history WHERE province_id = $1 AND reason = 'founding'`, [iga.id])).toBe(1);
     const ise = await province('ise');
     await expectRefused(
-      order(p1.id, (g, c) => createClan(g, p1, c, { clanName: 'Second', daimyoName: 'Kagetora', portrait: 'general', bannerColor: 'plum', bannerMon: 'tomoe', provinceId: ise.id })),
-      'ALREADY_HAS_CLAN',
+      order(p1.id, (g, c) => createClan(g, p1, { clanName: 'Second', tag: 'SEC', daimyoName: 'Kagetora', portrait: 'general', bannerColor: 'plum', bannerMon: 'tomoe', provinceId: ise.id })),
+      'ALREADY_IN_CLAN',
     );
   });
 
@@ -212,7 +227,7 @@ describe('persistent world', () => {
     // Stand just before the next tick, then cross it.
     const untilTick = Math.ceil((state.epoch.getTime() + (state.last_tick + 1) * 60_000 - clock) / GAME_MINUTE);
     await pass(Math.max(0, untilTick - 1));
-    const me = await buildMe(db(), { player: p1, clan }, now());
+    const me = await buildMe(db(), await viewerOf(p1), now());
     const before = me.clan!.resources;
     const net = me.clan!.income.net;
     expect(net.gold).toBeGreaterThan(0);
@@ -269,24 +284,24 @@ describe('persistent world', () => {
 
   it('develops the Five Pillars: XP from play, server-checked skills and branches', async () => {
     const clan = await clanOf(p1.id);
-    const pillars = await getPillars(db(), clan.id);
+    const pillars = await getPillars(db(), p1.id);
     expect(pillars.pillars).toHaveLength(5);
     const military = pillars.pillars.find((p) => p.id === 'military')!;
     expect(military.xp + military.level).toBeGreaterThan(1); // recruiting earned Military XP
     expect(pillars.pillars.find((p) => p.id === 'economy')!.xp).toBeGreaterThan(0); // building and production earned Economy XP
     expect(pillars.pillars.find((p) => p.id === 'leadership')!.xp).toBeGreaterThan(0);
 
-    await expectRefused(order(p1.id, (g) => unlockSkill(g, clan.id, 'mil_infantry')), 'SKILL_LOCKED');
-    await db().query(`UPDATE five_pillars SET level = 5, points = 4 WHERE clan_id = $1 AND pillar = 'military'`, [clan.id]);
-    for (let i = 0; i < 3; i++) await order(p1.id, (g) => unlockSkill(g, clan.id, 'mil_tactics'));
-    await order(p1.id, (g) => unlockSkill(g, clan.id, 'mil_infantry'));
+    await expectRefused(order(p1.id, (g) => unlockSkill(g, p1.id, 'mil_infantry')), 'SKILL_LOCKED');
+    await db().query(`UPDATE player_pillars SET level = 5, points = 4 WHERE player_id = $1 AND pillar = 'military'`, [p1.id]);
+    for (let i = 0; i < 3; i++) await order(p1.id, (g) => unlockSkill(g, p1.id, 'mil_tactics'));
+    await order(p1.id, (g) => unlockSkill(g, p1.id, 'mil_infantry'));
     // Out of points, and the rival branch is closed for good.
-    await expectRefused(order(p1.id, (g) => unlockSkill(g, clan.id, 'mil_tactics')), 'SKILL_LOCKED');
-    await db().query(`UPDATE five_pillars SET points = 1 WHERE clan_id = $1 AND pillar = 'military'`, [clan.id]);
-    await expectRefused(order(p1.id, (g) => unlockSkill(g, clan.id, 'mil_cavalry')), 'SKILL_LOCKED');
-    await expectRefused(order(p1.id, (g) => unlockSkill(g, clan.id, 'no_such_skill')), 'INVALID');
+    await expectRefused(order(p1.id, (g) => unlockSkill(g, p1.id, 'mil_tactics')), 'SKILL_LOCKED');
+    await db().query(`UPDATE player_pillars SET points = 1 WHERE player_id = $1 AND pillar = 'military'`, [p1.id]);
+    await expectRefused(order(p1.id, (g) => unlockSkill(g, p1.id, 'mil_cavalry')), 'SKILL_LOCKED');
+    await expectRefused(order(p1.id, (g) => unlockSkill(g, p1.id, 'no_such_skill')), 'INVALID');
 
-    const after = await getPillars(db(), clan.id);
+    const after = await getPillars(db(), p1.id);
     expect(after.skills.find((s) => s.code === 'mil_tactics')!.rank).toBe(3);
     expect(after.modifiers.attack).toBeCloseTo(0.005 * 4 + 0.03 * 3);
     expect(after.modifiers.infantry).toBeCloseTo(0.05);
@@ -311,20 +326,20 @@ describe('persistent world', () => {
     expect(plan.supplies).toBeGreaterThan(0);
 
     // "Move" is only for provinces you hold.
-    await expectRefused(order(p1.id, (g, c) => dispatchArmy(g, c, iga.id, ise.id, { ashigaru: 250, yari: 60 }, 'move')), 'MARCH_BLOCKED');
+    await expectRefused(order(p1.id, (g, c) => dispatchArmy(g, c, p1.id, iga.id, ise.id, { ashigaru: 250, yari: 60 }, 'move')), 'MARCH_BLOCKED');
     const food = (await getResources(db(), clan.id)).food;
-    await order(p1.id, (g, c) => dispatchArmy(g, c, iga.id, ise.id, { ashigaru: 250, yari: 60 }, 'attack'));
+    await order(p1.id, (g, c) => dispatchArmy(g, c, p1.id, iga.id, ise.id, { ashigaru: 250, yari: 60 }, 'attack'));
     expect((await getResources(db(), clan.id)).food).toBe(food - plan.supplies);
     expect((await getGarrison(db(), iga.id, clan.id))!.units).toMatchObject({ ashigaru: 30, yari: 10 });
     // The same soldiers cannot be sent twice.
-    await expectRefused(order(p1.id, (g, c) => dispatchArmy(g, c, iga.id, ise.id, { ashigaru: 250 }, 'attack')), 'MARCH_BLOCKED');
+    await expectRefused(order(p1.id, (g, c) => dispatchArmy(g, c, p1.id, iga.id, ise.id, { ashigaru: 250 }, 'attack')), 'MARCH_BLOCKED');
     expect(await count(`armies WHERE clan_id = $1 AND status = 'marching'`, [clan.id])).toBe(1);
 
-    const map = await buildMap(db(), { player: p1, clan }, now());
+    const map = await buildMap(db(), await viewerOf(p1), now());
     expect(map.movements.filter((m) => m.own)).toHaveLength(1);
     expect(map.movements[0].units).toMatchObject({ ashigaru: 250, yari: 60 });
     // Another player sees that an army is on the road, but not what it is made of.
-    const seenByP2 = await buildMap(db(), { player: p2, clan: await clanOf(p2.id) }, now());
+    const seenByP2 = await buildMap(db(), await viewerOf(p2), now());
     expect(seenByP2.movements[0].units).toBeNull();
 
     // The army arrives and gives battle; the battle is resolved later, by its own timer.
@@ -333,7 +348,7 @@ describe('persistent world', () => {
     expect(battle!.status).toBe('pending');
     battleId = battle!.id;
     expect((await province('ise')).owner_clan_id).toBeNull();
-    expect((await buildMap(db(), { player: p1, clan }, now())).provinces.find((p) => p.code === 'ise')!.underAttack).toBe(true);
+    expect((await buildMap(db(), await viewerOf(p1), now())).provinces.find((p) => p.code === 'ise')!.underAttack).toBe(true);
   });
 
   it('resolves the battle once, reproducibly, and transfers the province only on victory', async () => {
@@ -370,7 +385,7 @@ describe('persistent world', () => {
     expect(await count(`transactions WHERE clan_id = $1 AND reason = 'battle_loot'`, [clan.id])).toBeGreaterThan(0);
     expect(await count(`notifications WHERE player_id = $1 AND type = 'battle'`, [p1.id])).toBe(2);
     expect((await buildBattles(db(), clan)).battles).toHaveLength(1);
-    const me = await buildMe(db(), { player: p1, clan: await clanOf(p1.id) }, now());
+    const me = await buildMe(db(), await viewerOf(p1), now());
     expect(me.clan!.provinceCount).toBe(2);
   });
 
@@ -381,7 +396,7 @@ describe('persistent world', () => {
     const kii = await province('kii');
 
     // No attack without a war; no war against a protected newcomer... but p1 attacked no clan, so is still protected.
-    await expectRefused(order(p2.id, (g, c) => dispatchArmy(g, c, kii.id, ise.id, { ashigaru: 50 }, 'attack')), 'MARCH_BLOCKED');
+    await expectRefused(order(p2.id, (g, c) => dispatchArmy(g, c, p2.id, kii.id, ise.id, { ashigaru: 50 }, 'attack')), 'MARCH_BLOCKED');
     await expectRefused(order(p2.id, (g, c) => declareWar(g, c, c1.id)), 'WAR_BLOCKED');
 
     // A game day later the truce of the realm has lapsed.
@@ -392,10 +407,10 @@ describe('persistent world', () => {
     await expectRefused(order(p2.id, (g, c) => declareWar(g, c, c1.id)), 'WAR_BLOCKED');
     await expectRefused(order(p1.id, (g, c) => declareWar(g, c, c2.id)), 'WAR_BLOCKED');
     expect(await count(`notifications WHERE player_id = $1 AND type = 'war'`, [p1.id])).toBe(1);
-    expect((await buildProvince(db(), { player: p2, clan: c2 }, ise.id, now())).actions.canAttack).toBe(true);
+    expect((await buildProvince(db(), await viewerOf(p2), ise.id, now())).actions.canAttack).toBe(true);
 
     // p2 throws its small garrison at Ise and is beaten back; the province does not change hands.
-    await order(p2.id, (g, c) => dispatchArmy(g, c, kii.id, ise.id, { ashigaru: 70, yari: 25 }, 'attack'));
+    await order(p2.id, (g, c) => dispatchArmy(g, c, p2.id, kii.id, ise.id, { ashigaru: 70, yari: 25 }, 'attack'));
     await pass(200);
     const fought = await one<{ id: string; status: string }>(db(), 'SELECT id, status FROM battles WHERE attacker_clan_id = $1', [c2.id]);
     expect(fought!.status).toBe('resolved');
@@ -433,7 +448,7 @@ describe('persistent world', () => {
     await pass(WORLD.scout.minutes + 1);
     const op = await one<any>(db(), 'SELECT * FROM espionage WHERE id = $1', [opId]);
     expect(['success', 'failed']).toContain(op.status);
-    const view = await buildProvince(db(), { player: p2, clan: c2 }, ise.id, now());
+    const view = await buildProvince(db(), await viewerOf(p2), ise.id, now());
     if (op.status === 'success') {
       expect(view.intel!.units).toEqual((await getGarrison(db(), ise.id, (await clanOf(p1.id)).id))!.units);
       expect(view.province.strength).toMatchObject({ exact: true });
@@ -451,13 +466,13 @@ describe('persistent world', () => {
     const c2 = await clanOf(p2.id);
     const ise = await province('ise');
     const kii = await province('kii');
-    await db().query(`UPDATE five_pillars SET level = 4, points = 3 WHERE clan_id = $1 AND pillar = 'economy'`, [c2.id]);
+    await db().query(`UPDATE player_pillars SET level = 4, points = 3 WHERE player_id = $1 AND pillar = 'economy'`, [p2.id]);
 
     // Once the peace has run its course, p1 declares war and marches on Kii with everything in Ise.
     await pass(WORLD.truceHours * 60 + 1);
     await order(p1.id, (g, c) => declareWar(g, c, c2.id));
     const host = (await getGarrison(db(), ise.id, c1.id))!.units;
-    await order(p1.id, (g, c) => dispatchArmy(g, c, ise.id, kii.id, host, 'attack'));
+    await order(p1.id, (g, c) => dispatchArmy(g, c, p1.id, ise.id, kii.id, host, 'attack'));
     await pass(200);
     expect((await province('kii')).owner_clan_id).toBe(c1.id);
 
@@ -468,22 +483,22 @@ describe('persistent world', () => {
     expect(await count(`wars WHERE status = 'active'`)).toBe(0);
     expect(await count(`world_events WHERE type = 'fallen' AND clan_id = $1`, [c2.id])).toBe(1);
     // A fallen clan cannot give orders...
-    const me = await buildMe(db(), { player: p2, clan: fallen }, now());
+    const me = await buildMe(db(), await viewerOf(p2), now());
     expect(me.clan!.status).toBe('fallen');
     expect(me.clan!.provinceCount).toBe(0);
 
     // ...but its Daimyo can found a new seat, keeping everything learned in the Five Pillars.
     const izumi = await province('izumi');
-    await order(p2.id, (g, c) => createClan(g, p2, c, { clanName: 'Takeda', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: izumi.id }));
+    await order(p2.id, (g, c) => createClan(g, p2, { clanName: 'Takeda', tag: 'TAK', daimyoName: 'Harunobu', portrait: 'sage', bannerColor: 'teal', bannerMon: 'peaks', provinceId: izumi.id }));
     const risen = await clanOf(p2.id);
     expect(risen.id).toBe(c2.id);
     expect(risen.status).toBe('active');
     expect(risen.capital_province_id).toBe(izumi.id);
     expect(await getResources(db(), c2.id)).toEqual(WORLD.startingResources);
-    expect((await getPillars(db(), c2.id)).pillars.find((p) => p.id === 'economy')).toMatchObject({ level: 4, points: 3 });
+    expect((await getPillars(db(), p2.id)).pillars.find((p) => p.id === 'economy')).toMatchObject({ level: 4, points: 3 });
     expect(totalUnits((await getGarrison(db(), izumi.id, c2.id))!.units)).toBe(110);
     // The conqueror's capital is unchanged and it now rules three provinces.
-    expect((await buildMe(db(), { player: p1, clan: await clanOf(p1.id) }, now())).clan!.provinceCount).toBe(3);
+    expect((await buildMe(db(), await viewerOf(p1), now())).clan!.provinceCount).toBe(3);
   });
 
   it('keeps running with everyone offline, and NPC daimyo act', async () => {
@@ -524,15 +539,20 @@ describe('persistent world', () => {
 
   it('delivers realtime events only to the rooms a player may hear', async () => {
     const c1 = await clanOf(p1.id);
-    const first = await buildSync(db(), { player: p1, clan: c1 }, null, now());
+    const first = await buildSync(db(), await viewerOf(p1), null, now());
     expect(first.events).toHaveLength(0);
     expect(first.cursor).toBeGreaterThan(0);
-    const all = await buildSync(db(), { player: p1, clan: c1 }, 0, now());
+    const all = await buildSync(db(), await viewerOf(p1), 0, now());
     expect(all.events.length).toBeGreaterThan(0);
     const privateToP2 = await count(`realtime_events WHERE room = $1`, [`player:${p2.id}`]);
     expect(privateToP2).toBeGreaterThan(0);
-    const allowed = new Set((await rows<{ id: number }>(db(), `SELECT id FROM realtime_events WHERE room IN ('world', $1)`, [`player:${p1.id}`])).map((r) => r.id));
+    // The world room, the player's own room and their clan's room: nothing else.
+    const allowed = new Set(
+      (await rows<{ id: number }>(db(), `SELECT id FROM realtime_events WHERE room IN ('world', $1, $2)`, [`player:${p1.id}`, `clan:${c1.id}`])).map((r) => r.id),
+    );
     for (const e of all.events) expect(allowed.has(e.id)).toBe(true);
+    const c2 = await clanOf(p2.id);
+    expect(await count(`realtime_events WHERE room = $1`, [`clan:${c2.id}`])).toBeGreaterThan(0);
     expect(first.resources).toEqual(await getResources(db(), c1.id));
   });
 });
@@ -613,7 +633,7 @@ describe('HTTP API', () => {
     const founded = await call(clans, '/api/clans', {
       method: 'POST',
       headers: { 'idempotency-key': 'found-1' },
-      body: JSON.stringify({ clanName: 'Oda', daimyoName: 'Nobunaga', portrait: 'strategist', bannerColor: 'ochre', bannerMon: 'blossom', provinceId: slot.id }),
+      body: JSON.stringify({ clanName: 'Oda', tag: 'ODA', daimyoName: 'Nobunaga', portrait: 'strategist', bannerColor: 'ochre', bannerMon: 'blossom', provinceId: slot.id }),
     });
     expect(founded.status).toBe(200);
     expect(founded.body.clan.name).toBe('Oda');
@@ -680,5 +700,302 @@ describe('HTTP API', () => {
     const ok = await call(cron, '/api/cron/advance', { headers: { authorization: 'Bearer test-secret' } });
     expect(ok.status).toBe(200);
     expect(ok.body.ok).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Clan-based play (change request v2.0)
+  // -------------------------------------------------------------------------
+
+  const post = async (mod: string, path: string, body: unknown = {}, params?: Record<string, string>) =>
+    call((await import(mod)).POST, path, { method: 'POST', body: JSON.stringify(body), params });
+  const get = async (mod: string, path: string, params?: Record<string, string>) => call((await import(mod)).GET, path, { params });
+  const signUp = async (email: string, nickname: string) => {
+    cookie = '';
+    const res = await post('@/app/api/auth/register/route', '/api/auth/register', { email, password: 'long enough pw', nickname });
+    expect(res.status).toBe(200);
+    return { cookie: res.headers.get('set-cookie')!.split(';')[0], id: res.body.player.id as string };
+  };
+  let leader = '';
+  let ranmaru: { cookie: string; id: string };
+  let hide: { cookie: string; id: string };
+  let outsider: { cookie: string; id: string };
+  let odaId = '';
+
+  it('lets players discover a clan, apply, be invited and join', async () => {
+    leader = cookie;
+    ranmaru = await signUp('ran@example.com', 'Ranmaru');
+    hide = await signUp('hide@example.com', 'Hideyoshi');
+    outsider = await signUp('dosan@example.com', 'Dosan');
+
+    // A new player has a purse and pillars of their own before joining anyone.
+    cookie = ranmaru.cookie;
+    const fresh = (await get('@/app/api/player/me/route', '/api/player/me')).body;
+    expect(fresh.clan).toBeNull();
+    expect(fresh.membership).toBeNull();
+    expect(fresh.personal.purse.gold).toBe(300);
+    expect((await get('@/app/api/pillars/me/route', '/api/pillars/me')).body.council).toBeNull();
+
+    const dir = (await get('@/app/api/clans/route', '/api/clans')).body;
+    const oda = dir.entries.find((e: any) => e.clan.name === 'Oda');
+    odaId = oda.clan.id;
+    expect(oda.clan.tag).toBe('ODA');
+    expect(oda.clan.memberCount).toBe(1);
+    expect(oda.join.option).toBe('apply');
+    expect(dir.entries.find((e: any) => e.clan.isNpc).join.option).toBeNull();
+    expect((await get('@/app/api/clans/route', '/api/clans?search=od')).body.entries).toHaveLength(1);
+
+    // Not open: joining outright is refused; applying works once.
+    expect((await post('@/app/api/clans/[id]/join/route', `/api/clans/${odaId}/join`, {}, { id: odaId })).body.error.code).toBe('NOT_OPEN');
+    const applied = await post('@/app/api/clans/[id]/apply/route', `/api/clans/${odaId}/apply`, { message: 'I will carry your sandals.' }, { id: odaId });
+    expect(applied.status).toBe(200);
+    expect(applied.body.applications).toHaveLength(1);
+    expect((await post('@/app/api/clans/[id]/apply/route', `/api/clans/${odaId}/apply`, {}, { id: odaId })).body.error.code).toBe('ALREADY_APPLIED');
+
+    // The leader sees the application and admits the applicant as a Recruit.
+    cookie = leader;
+    let hub = (await get('@/app/api/clan/route', '/api/clan')).body;
+    expect(hub.membership.role).toBe('leader');
+    expect(hub.applications).toHaveLength(1);
+    expect(hub.applications[0].message).toBe('I will carry your sandals.');
+    hub = (await post('@/app/api/clan/applications/route', '/api/clan/applications', { applicationId: hub.applications[0].id, accept: true })).body;
+    expect(hub.members).toHaveLength(2);
+    expect(hub.members.find((m: any) => m.nickname === 'Ranmaru').role).toBe('recruit');
+    expect(hub.applications).toHaveLength(0);
+
+    // Invitation only: the invited player may accept, nobody else can get in.
+    hub = (await post('@/app/api/clan/settings/route', '/api/clan/settings', { recruitment: 'invite', description: 'Rule the realm by force.' })).body;
+    expect(hub.clan.recruitment).toBe('invite');
+    expect(hub.clan.description).toBe('Rule the realm by force.');
+    hub = (await post('@/app/api/clan/invitations/route', '/api/clan/invitations', { nickname: 'hideyoshi' })).body;
+    expect(hub.invitations).toHaveLength(1);
+    expect((await post('@/app/api/clan/invitations/route', '/api/clan/invitations', { nickname: 'hideyoshi' })).body.error.code).toBe('ALREADY_INVITED');
+
+    cookie = outsider.cookie;
+    expect((await post('@/app/api/clans/[id]/apply/route', `/api/clans/${odaId}/apply`, {}, { id: odaId })).body.error.code).toBe('NOT_OPEN');
+
+    cookie = hide.cookie;
+    const invited = (await get('@/app/api/clans/route', '/api/clans')).body;
+    expect(invited.invitations).toHaveLength(1);
+    expect(invited.entries.find((e: any) => e.clan.id === odaId).join.option).toBe('accept_invitation');
+    const joined = await post('@/app/api/clan/invitations/respond/route', '/api/clan/invitations/respond', { invitationId: invited.invitations[0].id, accept: true });
+    expect(joined.status).toBe(200);
+    expect(joined.body.clan.name).toBe('Oda');
+    expect(joined.body.membership.role).toBe('recruit');
+    // One clan at a time.
+    expect((await post('@/app/api/clans/[id]/join/route', `/api/clans/${odaId}/join`, {}, { id: odaId })).body.error.code).toBe('ALREADY_IN_CLAN');
+    expect(await count('clan_members WHERE clan_id = $1', [odaId])).toBe(3);
+  });
+
+  it('holds every member to the permissions of their role', async () => {
+    cookie = leader;
+    const hub = (await get('@/app/api/clan/route', '/api/clan')).body;
+    const capital = hub.clan.capitalProvinceId as string;
+
+    // A Recruit may not spend the treasury or command.
+    cookie = ranmaru.cookie;
+    const denied = await post('@/app/api/buildings/upgrade/route', '/api/buildings/upgrade', { provinceId: capital, type: 'market' });
+    expect(denied.status).toBe(403);
+    expect(denied.body.error.code).toBe('FORBIDDEN_ROLE');
+    expect((await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: hide.id, role: 'general' })).body.error.code).toBe('FORBIDDEN_ROLE');
+    // ...but shares the clan's land and treasury views.
+    expect((await get('@/app/api/army/route', '/api/army')).status).toBe(200);
+
+    // The leader appoints a Treasurer and a Daimyo.
+    cookie = leader;
+    await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'treasurer' });
+    const appointed = (await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: hide.id, role: 'officer' })).body;
+    expect(appointed.members.find((m: any) => m.nickname === 'Hideyoshi').roleName).toBe('Daimyo');
+    expect((await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'leader' })).body.error.code).toBe('INVALID');
+
+    // The Treasurer may build (the builders may be busy, but the role is no longer the obstacle), not recruit.
+    cookie = ranmaru.cookie;
+    const build = await post('@/app/api/buildings/upgrade/route', '/api/buildings/upgrade', { provinceId: capital, type: 'market' });
+    expect(build.body.error?.code).not.toBe('FORBIDDEN_ROLE');
+    const recruitDenied = await post('@/app/api/army/recruit/route', '/api/army/recruit', { provinceId: capital, unitType: 'ashigaru', count: 5 });
+    expect(recruitDenied.body.error.code).toBe('FORBIDDEN_ROLE');
+
+    // The leader reconfigures what a Treasurer may do; it takes effect at once.
+    cookie = leader;
+    const perms = (await post('@/app/api/clan/permissions/route', '/api/clan/permissions', { role: 'treasurer', permissions: ['treasury', 'build', 'recruit'] })).body;
+    expect(perms.permissions.treasurer.sort()).toEqual(['build', 'recruit', 'treasury']);
+    cookie = ranmaru.cookie;
+    const recruitNow = await post('@/app/api/army/recruit/route', '/api/army/recruit', { provinceId: capital, unitType: 'ashigaru', count: 5 });
+    expect(recruitNow.body.error?.code).not.toBe('FORBIDDEN_ROLE');
+    // Only the leader edits permissions.
+    expect((await post('@/app/api/clan/permissions/route', '/api/clan/permissions', { role: 'recruit', permissions: ['treasury'] })).body.error.code).toBe('FORBIDDEN_ROLE');
+
+    // A Daimyo manages members below their own rank only.
+    cookie = hide.cookie;
+    expect((await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'officer' })).body.error.code).toBe('FORBIDDEN_ROLE');
+    expect((await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'general' })).status).toBe(200);
+    cookie = leader;
+    await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'treasurer' });
+  });
+
+  it('keeps the shared treasury secure and auditable', async () => {
+    cookie = ranmaru.cookie;
+    const paid = await post('@/app/api/clan/contribute/route', '/api/clan/contribute', { resources: { gold: 100, wood: 50 } });
+    expect(paid.status).toBe(200);
+    const mine = paid.body.treasury.contributions.find((c: any) => c.nickname === 'Ranmaru');
+    expect(mine.resources.gold).toBe(100);
+    expect(mine.resources.wood).toBe(50);
+    expect(mine.points).toBe(140);
+    // Both ledgers record the same movement, with the member who made it.
+    expect(await count(`transactions WHERE clan_id = $1 AND reason = 'member_contribution' AND actor_player_id = $2 AND resource = 'gold' AND amount = 100`, [odaId, ranmaru.id])).toBe(1);
+    expect(await count(`player_transactions WHERE player_id = $1 AND reason = 'clan_contribution' AND resource = 'gold' AND amount = -100`, [ranmaru.id])).toBe(1);
+    expect(paid.body.treasury.log.some((t: any) => t.reason === 'member_contribution' && t.actor === 'Ranmaru' && t.amount === 100)).toBe(true);
+
+    // More than the purse holds: refused, and nothing moves.
+    const tooMuch = await post('@/app/api/clan/contribute/route', '/api/clan/contribute', { resources: { gold: 10_000_000 } });
+    expect(tooMuch.body.error.code).toBe('INSUFFICIENT_RESOURCES');
+    expect((await one<{ contribution: number }>(db(), 'SELECT contribution FROM clan_members WHERE player_id = $1', [ranmaru.id]))!.contribution).toBe(140);
+
+    // The Treasurer pays a member from the treasury; a Daimyo holds no key to it.
+    const grantOut = await post('@/app/api/clan/withdraw/route', '/api/clan/withdraw', { playerId: hide.id, resources: { gold: 30 }, note: 'for the road' });
+    expect(grantOut.status).toBe(200);
+    expect(await count(`transactions WHERE clan_id = $1 AND reason = 'treasury_withdrawal' AND actor_player_id = $2 AND amount = -30`, [odaId, ranmaru.id])).toBe(1);
+    expect(await count(`player_transactions WHERE player_id = $1 AND reason = 'treasury_grant' AND amount = 30`, [hide.id])).toBe(1);
+    expect(grantOut.body.activity.some((a: any) => a.type === 'withdrawal' && a.body.includes('for the road'))).toBe(true);
+    cookie = hide.cookie;
+    expect((await post('@/app/api/clan/withdraw/route', '/api/clan/withdraw', { playerId: hide.id, resources: { gold: 500 } })).body.error.code).toBe('FORBIDDEN_ROLE');
+    // Nobody can pay treasury resources to someone outside the clan.
+    cookie = ranmaru.cookie;
+    expect((await post('@/app/api/clan/withdraw/route', '/api/clan/withdraw', { playerId: outsider.id, resources: { gold: 1 } })).body.error.code).toBe('NOT_FOUND');
+
+    // The personal residence is paid from the purse.
+    const before = (await one<{ residence_level: number }>(db(), 'SELECT residence_level FROM players WHERE id = $1', [hide.id]))!.residence_level;
+    cookie = hide.cookie;
+    const home = await post('@/app/api/player/residence/route', '/api/player/residence');
+    expect(home.status).toBe(200);
+    expect(home.body.personal.residenceLevel).toBe(before + 1);
+  });
+
+  it('carries each pillar of the clan through its council seat', async () => {
+    // The Treasurer is the clan's best economist: the clan's Economy is theirs.
+    await db().query(`UPDATE player_pillars SET level = 9 WHERE player_id = $1 AND pillar = 'economy'`, [ranmaru.id]);
+    cookie = leader;
+    const pillars = (await get('@/app/api/pillars/me/route', '/api/pillars/me')).body;
+    const seat = pillars.council.seats.find((s: any) => s.pillar === 'economy');
+    expect(seat.nickname).toBe('Ranmaru');
+    expect(seat.level).toBe(9);
+    expect(pillars.council.modifiers.prodAll).toBeGreaterThan(pillars.modifiers.prodAll);
+    // Without the seat the same skill counts for nothing.
+    await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'samurai' });
+    const without = (await get('@/app/api/pillars/me/route', '/api/pillars/me')).body;
+    expect(without.council.seats.find((s: any) => s.pillar === 'economy').nickname).toBe('Nobunaga');
+    await post('@/app/api/clan/members/role/route', '/api/clan/members/role', { playerId: ranmaru.id, role: 'treasurer' });
+  });
+
+  it('keeps clan chat to the clan and private messages to the two players', async () => {
+    cookie = ranmaru.cookie;
+    const said = await post('@/app/api/chat/route', '/api/chat', { channel: 'clan', body: 'The granaries are full.' });
+    expect(said.body.message.channel).toBe('clan');
+
+    cookie = hide.cookie;
+    const clanChat = (await get('@/app/api/chat/route', '/api/chat?channel=clan')).body;
+    expect(clanChat.messages.map((m: any) => m.body)).toContain('The granaries are full.');
+    const world = (await get('@/app/api/chat/route', '/api/chat?channel=world')).body;
+    expect(world.messages.map((m: any) => m.body)).not.toContain('The granaries are full.');
+
+    // An outsider has no clan channel, and the clan's room is not in their feed.
+    cookie = outsider.cookie;
+    expect((await get('@/app/api/chat/route', '/api/chat?channel=clan')).body.error.code).toBe('NO_CLAN');
+    expect((await post('@/app/api/chat/route', '/api/chat', { channel: 'clan', body: 'Let me in' })).body.error.code).toBe('NO_CLAN');
+    const feed = (await get('@/app/api/sync/route', '/api/sync?cursor=0')).body;
+    const clanEventIds = new Set((await rows<{ id: number }>(db(), 'SELECT id FROM realtime_events WHERE room = $1', [`clan:${odaId}`])).map((r) => r.id));
+    expect(clanEventIds.size).toBeGreaterThan(0);
+    expect(feed.events.some((e: any) => clanEventIds.has(e.id))).toBe(false);
+
+    // A private message reaches its recipient and nobody else.
+    const dm = await post('@/app/api/chat/route', '/api/chat', { channel: 'dm', to: ranmaru.id, body: 'Name your price.' });
+    expect(dm.status).toBe(200);
+    expect((await post('@/app/api/chat/route', '/api/chat', { channel: 'dm', to: outsider.id, body: 'me' })).body.error.code).toBe('INVALID');
+
+    cookie = ranmaru.cookie;
+    expect((await get('@/app/api/player/me/route', '/api/player/me')).body.unreadMessages).toBeGreaterThanOrEqual(1);
+    const threads = (await get('@/app/api/chat/threads/route', '/api/chat/threads')).body;
+    expect(threads.threads).toHaveLength(1);
+    expect(threads.threads[0].with.nickname).toBe('Dosan');
+    expect(threads.threads[0].unread).toBe(1);
+    const thread = (await get('@/app/api/chat/route', `/api/chat?channel=dm&with=${outsider.id}`)).body;
+    expect(thread.messages.map((m: any) => m.body)).toEqual(['Name your price.']);
+    expect(thread.messages[0].mine).toBe(false);
+    expect((await get('@/app/api/chat/threads/route', '/api/chat/threads')).body.threads[0].unread).toBe(0);
+    await post('@/app/api/chat/route', '/api/chat', { channel: 'dm', to: outsider.id, body: 'More than you have.' });
+
+    cookie = hide.cookie;
+    expect((await get('@/app/api/chat/threads/route', '/api/chat/threads')).body.threads).toHaveLength(0);
+    expect((await get('@/app/api/chat/route', `/api/chat?channel=dm&with=${outsider.id}`)).body.messages).toHaveLength(0);
+    const hideFeed = (await get('@/app/api/sync/route', '/api/sync?cursor=0')).body;
+    expect(hideFeed.events.some((e: any) => e.event === 'chat:message' && e.payload.channel === 'dm')).toBe(false);
+
+    cookie = outsider.cookie;
+    const reply = (await get('@/app/api/chat/route', `/api/chat?channel=dm&with=${ranmaru.id}`)).body;
+    expect(reply.messages.map((m: any) => m.body)).toEqual(['Name your price.', 'More than you have.']);
+  });
+
+  it('hands over leadership, lets members leave, and dissolves a clan with its last member', async () => {
+    // A leader with followers cannot simply walk away.
+    cookie = leader;
+    expect((await post('@/app/api/clan/leave/route', '/api/clan/leave')).body.error.code).toBe('LEADER_MUST_HAND_OVER');
+    cookie = hide.cookie;
+    expect((await post('@/app/api/clan/members/transfer/route', '/api/clan/members/transfer', { playerId: ranmaru.id })).body.error.code).toBe('FORBIDDEN_ROLE');
+    cookie = leader;
+    const handed = (await post('@/app/api/clan/members/transfer/route', '/api/clan/members/transfer', { playerId: hide.id })).body;
+    expect(handed.membership.role).toBe('officer');
+    expect(handed.members.find((m: any) => m.role === 'leader').nickname).toBe('Hideyoshi');
+    expect((await one<{ player_id: string }>(db(), 'SELECT player_id FROM clans WHERE id = $1', [odaId]))!.player_id).toBe(hide.id);
+    expect(await count(`clan_members WHERE clan_id = $1 AND role = 'leader'`, [odaId])).toBe(1);
+
+    // A member who leaves keeps their purse and everything learned.
+    cookie = ranmaru.cookie;
+    const left = await post('@/app/api/clan/leave/route', '/api/clan/leave');
+    expect(left.body.clan).toBeNull();
+    expect(left.body.personal.purse.gold).toBeGreaterThan(0);
+    expect((await get('@/app/api/pillars/me/route', '/api/pillars/me')).body.pillars.find((p: any) => p.id === 'economy').level).toBe(9);
+    expect((await get('@/app/api/clan/route', '/api/clan')).body.error.code).toBe('NO_CLAN');
+
+    // The new leader removes the old one; an removed member is free to found a clan of their own.
+    cookie = hide.cookie;
+    const kicked = (await post('@/app/api/clan/members/kick/route', '/api/clan/members/kick', { playerId: (await one<{ id: string }>(db(), `SELECT id FROM players WHERE nickname = 'Nobunaga'`))!.id })).body;
+    expect(kicked.members).toHaveLength(1);
+
+    // A clan of one: when its leader leaves, it is dissolved and its land returns to the local warriors.
+    const capital = (await one<{ capital_province_id: string }>(db(), 'SELECT capital_province_id FROM clans WHERE id = $1', [odaId]))!.capital_province_id;
+    const gone = await post('@/app/api/clan/leave/route', '/api/clan/leave');
+    expect(gone.body.clan).toBeNull();
+    const dissolved = (await one<ClanRow>(db(), 'SELECT * FROM clans WHERE id = $1', [odaId]))!;
+    expect(dissolved.status).toBe('disbanded');
+    expect(dissolved.player_id).toBeNull();
+    expect(await count('provinces WHERE owner_clan_id = $1', [odaId])).toBe(0);
+    expect(totalUnits((await getGarrison(db(), capital, null))!.units)).toBeGreaterThan(0);
+    expect(await count('armies WHERE clan_id = $1', [odaId])).toBe(0);
+    expect(await count('clan_members WHERE clan_id = $1', [odaId])).toBe(0);
+    expect(await count(`province_ownership_history WHERE province_id = $1 AND reason = 'abandoned'`, [capital])).toBe(1);
+
+    // Its name, tag, colour and seat are free again; a new clan with open gates takes them.
+    cookie = outsider.cookie;
+    const map = (await get('@/app/api/world/map/route', '/api/world/map')).body;
+    expect(map.provinces.find((p: any) => p.id === capital).isStartSlot).toBe(true);
+    expect(map.clans.some((c: any) => c.id === odaId)).toBe(false);
+    const founded = await post('@/app/api/clans/route', '/api/clans', {
+      clanName: 'Oda',
+      tag: 'oda',
+      recruitment: 'open',
+      daimyoName: 'Dosan',
+      portrait: 'shadow',
+      bannerColor: 'ochre',
+      bannerMon: 'tomoe',
+      provinceId: capital,
+    });
+    expect(founded.status).toBe(200);
+    expect(founded.body.membership.role).toBe('leader');
+    expect(founded.body.clan.tag).toBe('ODA');
+    expect(founded.body.clan.id).not.toBe(odaId);
+    // Open recruitment: anyone without a clan walks in.
+    cookie = ranmaru.cookie;
+    const walkedIn = await post('@/app/api/clans/[id]/join/route', `/api/clans/${founded.body.clan.id}/join`, {}, { id: founded.body.clan.id });
+    expect(walkedIn.body.clan.name).toBe('Oda');
+    expect(walkedIn.body.membership.role).toBe('recruit');
   });
 });

@@ -3,7 +3,8 @@
  *
  *  - rejects cross-site mutations (origin check; the session cookie is SameSite=Lax);
  *  - applies rate limits (OPS-05);
- *  - authenticates the session and, where needed, requires an active clan;
+ *  - authenticates the session and, where needed, requires membership of an
+ *    active clan and a role that holds the permission the action needs;
  *  - validates the JSON body against a schema;
  *  - replays the stored answer for a repeated Idempotency-Key instead of
  *    running the action twice;
@@ -11,11 +12,12 @@
  *  - turns game-rule errors into `{ error: { code, message } }` responses.
  */
 import type { z } from 'zod';
+import { PERMISSION_DEFS, ROLE_DEFS, type ClanPermission } from '@/game/clan';
 import { advanceForMutation, advanceLazily, advanceWorld } from './advance';
-import { authenticate, readSessionToken, type RequestMeta, type Session } from './auth';
+import { authenticate, readSessionToken, type Membership, type RequestMeta, type Session } from './auth';
 import { one, pool, withWorldLock, type Db } from './db';
 import { GameError } from './errors';
-import type { ClanRow } from './rows';
+import type { ClanRow, MemberRow } from './rows';
 import type { Viewer } from './views';
 import { gameContext, type G } from './world';
 
@@ -36,6 +38,7 @@ export interface AuthedContext<B> extends ApiContext<B> {
 export interface ClanContext<B> extends AuthedContext<B> {
   /** The player's active clan. */
   clan: ClanRow;
+  member: Membership;
 }
 
 interface RateRule {
@@ -52,6 +55,8 @@ interface Options<S extends z.ZodType | undefined> {
   ipRate?: RateRule;
   /** Skip bringing the world up to date (auth and housekeeping routes). */
   skipAdvance?: boolean;
+  /** Clan routes: the permission the member's role must hold. */
+  permission?: ClanPermission;
 }
 
 type BodyOf<S> = S extends z.ZodType ? z.infer<S> : undefined;
@@ -227,7 +232,7 @@ export function playerRoute<S extends z.ZodType | undefined = undefined>(
           if (opts.mutation) await advanceForMutation();
           else await advanceLazily();
         }
-        return handler({ ...baseContext(req, body, params), session, viewer: { player: session.player, clan: session.clan } });
+        return handler({ ...baseContext(req, body, params), session, viewer: { player: session.player, clan: session.clan, member: session.member } });
       };
       if (opts.mutation) return await runIdempotent(session.userId, req, run);
       const result = await run();
@@ -238,36 +243,77 @@ export function playerRoute<S extends z.ZodType | undefined = undefined>(
   };
 }
 
-/** A route that needs the player to lead an active clan. */
+export function forbiddenFor(role: MemberRow['role'], permission: ClanPermission): GameError {
+  return new GameError(
+    'FORBIDDEN_ROLE',
+    `Your role (${ROLE_DEFS[role].name}) may not do this. It needs the "${PERMISSION_DEFS[permission].name}" permission; ask your clan leader.`,
+    403,
+  );
+}
+
+/** A route that needs the player to belong to an active clan (and, with `permission`, to hold it). */
 export function clanRoute<S extends z.ZodType | undefined = undefined>(
   opts: Options<S>,
   handler: (ctx: ClanContext<BodyOf<S>>) => Promise<unknown>,
 ): RouteHandler {
   return playerRoute(opts, async (ctx) => {
     const clan = ctx.session.clan;
-    if (!clan) throw new GameError('NO_CLAN', 'Found a clan first', 409);
-    if (clan.status !== 'active') throw new GameError('CLAN_FALLEN', 'Your clan has fallen. Found a new seat to continue.', 409);
-    return handler({ ...ctx, clan });
+    const member = ctx.session.member;
+    if (!clan || !member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+    if (clan.status !== 'active') throw new GameError('CLAN_FALLEN', 'Your clan has fallen. It must found a new seat to continue.', 409);
+    if (opts.permission && !member.permissions.includes(opts.permission)) throw forbiddenFor(member.role, opts.permission);
+    return handler({ ...ctx, clan, member });
   });
 }
 
+/** True when the member's role holds the permission. Reads committed state inside the caller's transaction. */
+export async function hasPermission(tx: Db, member: Pick<MemberRow, 'clan_id' | 'role'>, permission: ClanPermission): Promise<boolean> {
+  if (member.role === 'leader') return true;
+  return !!(await one(tx, 'SELECT 1 FROM clan_role_permissions WHERE clan_id = $1 AND role = $2 AND permission = $3', [
+    member.clan_id,
+    member.role,
+    permission,
+  ]));
+}
+
+interface ActOptions {
+  permission?: ClanPermission;
+  /** Allow acting for a clan that has fallen (re-founding, leaving). */
+  allowFallen?: boolean;
+}
+
 /**
- * Run a player's order: one transaction, under the world lock, with a game
- * context stamped with the acting player for the audit log. The clan row is
- * re-read and locked inside the transaction, so the order is judged against
- * committed state rather than against what the session looked like earlier.
+ * Run a member's order: one transaction, under the world lock, with a game
+ * context stamped with the acting player for the audit log. The membership and
+ * clan rows are re-read and locked inside the transaction, so the order is
+ * judged against committed state: a member demoted a moment ago cannot slip
+ * an order through on a stale session.
  */
 export async function act<T>(
   ctx: { session: Session; now: Date },
-  fn: (g: G, clan: ClanRow) => Promise<T>,
+  fn: (g: G, clan: ClanRow, member: MemberRow) => Promise<T>,
+  options: ActOptions | ClanPermission = {},
 ): Promise<T> {
+  const opts: ActOptions = typeof options === 'string' ? { permission: options } : options;
   return withWorldLock(async (tx: Db) => {
     const g = await gameContext(tx, new Date(), ctx.session.player.id);
-    const clan = await one<ClanRow>(tx, 'SELECT * FROM clans WHERE player_id = $1 FOR UPDATE', [ctx.session.player.id]);
-    if (!clan) throw new GameError('NO_CLAN', 'Found a clan first', 409);
-    if (clan.status !== 'active') throw new GameError('CLAN_FALLEN', 'Your clan has fallen. Found a new seat to continue.', 409);
-    return fn(g, clan);
+    const member = await one<MemberRow>(tx, 'SELECT player_id, clan_id, role, joined_at, contribution FROM clan_members WHERE player_id = $1 FOR UPDATE', [
+      ctx.session.player.id,
+    ]);
+    if (!member) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+    const clan = await one<ClanRow>(tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [member.clan_id]);
+    if (!clan) throw new GameError('NO_CLAN', 'Join or found a clan first', 409);
+    if (clan.status !== 'active' && !opts.allowFallen) {
+      throw new GameError('CLAN_FALLEN', 'Your clan has fallen. It must found a new seat to continue.', 409);
+    }
+    if (opts.permission && !(await hasPermission(tx, member, opts.permission))) throw forbiddenFor(member.role, opts.permission);
+    return fn(g, clan, member);
   });
+}
+
+/** Run a player's own action (no clan needed) in one transaction under the world lock. */
+export async function actAsPlayer<T>(ctx: { session: Session }, fn: (g: G) => Promise<T>): Promise<T> {
+  return withWorldLock(async (tx: Db) => fn(await gameContext(tx, new Date(), ctx.session.player.id)));
 }
 
 export { json };
