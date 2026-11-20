@@ -905,8 +905,8 @@ export interface AuthResponse {
 /** POST /api/clans → MeResponse */
 export interface CreateClanRequest {
   clanName: string;
-  /** 2-5 letters or numbers, unique. */
-  tag: string;
+  /** 2-5 letters or numbers, unique. Left out, one is made from the clan name. */
+  tag?: string;
   description?: string;
   recruitment?: RecruitmentMode;
   language?: string;

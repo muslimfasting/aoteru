@@ -6,7 +6,8 @@
  *
  *   npm run db:migrate            apply pending migrations
  *   npm run db:reset              drop everything and start over (needs --yes in production)
- *   tsx scripts/migrate.ts --if-configured   used by `npm run build`: skip quietly when no database is configured
+ *   tsx scripts/migrate.ts --if-configured   used by `npm run build`: skip quietly when no database is configured,
+ *                                            and on Vercel preview builds (they share the production database)
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,6 +23,12 @@ const url =
   process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL || process.env.POSTGRES_URL;
 
 async function main(): Promise<void> {
+  // A preview build shares the production database: building a feature branch must never change its schema.
+  // Migrations are applied by the production build only (or by hand with `npm run db:migrate`).
+  if (args.has('--if-configured') && process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production') {
+    console.log(`[migrate] ${process.env.VERCEL_ENV} build: leaving the database schema alone.`);
+    return;
+  }
   if (!url) {
     if (args.has('--if-configured')) {
       console.log('[migrate] DATABASE_URL is not set; skipping migrations.');

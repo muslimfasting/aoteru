@@ -18,6 +18,17 @@ function cleanName(value: string, rule: { min: number; max: number; pattern: Reg
   return v;
 }
 
+/** A tag made from the clan name, for founders who did not choose one. */
+async function freeTag(g: G, clanName: string): Promise<string> {
+  const letters = clanName.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const base = (letters.length >= 2 ? letters : `${letters}CLAN`).slice(0, 4);
+  for (let n = 1; n < 100; n++) {
+    const candidate = n === 1 ? base : `${base.slice(0, 3)}${n}`;
+    if (!(await one(g.tx, `SELECT 1 FROM clans WHERE upper(tag) = $1 AND status <> 'disbanded'`, [candidate]))) return candidate;
+  }
+  return base;
+}
+
 /**
  * Found a clan (change request §2.2): the founder becomes its leader, the clan
  * gets its banner, tag and recruitment settings, and the chosen starting
@@ -46,7 +57,7 @@ export async function createClan(g: G, player: { id: string; nickname: string },
   if (!BANNER_COLORS.some((c) => c.id === input.bannerColor)) throw invalid('Choose a banner colour');
   if (!BANNER_MONS.some((m) => m.id === input.bannerMon)) throw invalid('Choose a banner crest');
 
-  const rawTag = (input.tag ?? existing?.tag ?? '').trim().toUpperCase();
+  const rawTag = (input.tag ?? existing?.tag ?? (await freeTag(g, clanName))).trim().toUpperCase();
   if (rawTag.length < CLAN_RULES.tag.min || rawTag.length > CLAN_RULES.tag.max || !CLAN_RULES.tag.pattern.test(rawTag)) {
     throw invalid(`Clan tag must be ${CLAN_RULES.tag.min}-${CLAN_RULES.tag.max} letters or numbers`);
   }

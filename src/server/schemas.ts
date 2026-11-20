@@ -18,7 +18,7 @@ const bag = z.object({
 });
 export const createClanBody = z.object({
   clanName: z.string().max(60),
-  tag: z.string().max(10),
+  tag: z.string().max(10).optional(),
   description: z.string().max(1000).optional(),
   recruitment: z.enum(RECRUITMENT_MODES).optional(),
   language: z.string().max(10).optional(),
