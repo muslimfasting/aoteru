@@ -10,7 +10,7 @@ import { one, rows } from './db';
 import { conflict, forbidden, invalid, notFound } from './errors';
 import { spend } from './economy';
 import { audit, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import { levelsByProvince, loadMods, type BuildingRow, type ProvinceRow } from './rows';
 import { addMs, gameMs, type G } from './world';
 
@@ -66,7 +66,7 @@ export async function completeUpgrade(g: G, buildingId: string): Promise<void> {
   const owner = province.owner_clan_id;
   if (owner) {
     const mods = await loadMods(g.tx, owner);
-    await awardXp(g, owner, 'economy', 15 * level, mods.xpGain);
+    await awardClanXp(g, owner, 'economy', 15 * level, mods.xpGain);
     await notifyClan(g, owner, {
       type: 'building',
       title: `${BUILDINGS[building.type].name} level ${level} completed`,

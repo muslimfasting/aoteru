@@ -17,7 +17,8 @@ import { expireProposals } from './diplomacy';
 import { applyHourly, bagTotal, clanIncome, grant } from './economy';
 import { chronicle, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
 import { runNpcTurn } from './npc';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
+import { payResidences } from './purse';
 import {
   eventMultipliers,
   levelsByProvince,
@@ -83,15 +84,18 @@ export async function processTick(tx: Db, state: WorldStateRow, tickNumber: numb
 
     // Experience from ruling: governing (Leadership), producing (Economy), keeping the peace (Culture).
     const population = own.reduce((s, p) => s + p.population, 0);
-    await awardXp(g, clan.id, 'leadership', own.length * 2 + Math.floor(population / 2000), mods.xpGain);
-    await awardXp(g, clan.id, 'economy', Math.floor(bagTotal(income.production) / 100), mods.xpGain);
+    await awardClanXp(g, clan.id, 'leadership', own.length * 2 + Math.floor(population / 2000), mods.xpGain);
+    await awardClanXp(g, clan.id, 'economy', Math.floor(bagTotal(income.production) / 100), mods.xpGain);
     let culture = 0;
     for (const p of own) {
       culture += p.loyalty >= 80 ? 2 : p.loyalty >= 60 ? 1 : 0;
       if (p.code === 'yamashiro') culture += 3;
     }
-    await awardXp(g, clan.id, 'culture', culture, mods.xpGain);
+    await awardClanXp(g, clan.id, 'culture', culture, mods.xpGain);
   }
+
+  // Members draw the income of their residences and train.
+  await payResidences(g);
 
   // 6-7. Daily: population, loyalty, rebellion; twice daily: a chance of a world event.
   if (tickNumber % WORLD.ticksPerDay === 0) await dailyUpdate(g, active, starving);

@@ -1,8 +1,8 @@
 import { pool } from '@/server/db';
-import { clanRoute } from '@/server/http';
+import { playerRoute } from '@/server/http';
 import { getPillars } from '@/server/progression';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /api/pillars/me — Five Pillars levels, skills and active modifiers. */
-export const GET = clanRoute({}, async ({ clan }) => getPillars(pool(), clan.id));
+/** GET /api/pillars/me — the player's own Five Pillars, plus what their clan's council lends everyone. */
+export const GET = playerRoute({}, async ({ viewer }) => getPillars(pool(), viewer.player.id));

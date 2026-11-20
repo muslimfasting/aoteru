@@ -1,16 +1,18 @@
 import type { RealtimeEventName } from '@/game/api';
 import type { ResourceBag } from '@/game/config';
-import { one, type Db } from './db';
+import { one, rows, type Db } from './db';
 import type { G } from './world';
 
 type Ctx = Pick<G, 'tx' | 'now'>;
 
 export const WORLD_ROOM = 'world';
 export const playerRoom = (playerId: string) => `player:${playerId}`;
+export const clanRoom = (clanId: string) => `clan:${clanId}`;
 
 /**
- * Queue a realtime event (GDD §16). Events go to the shared world room or to a
- * single player's private room — never a resource balance to everyone.
+ * Queue a realtime event (GDD §16). Events go to the shared world room, to a
+ * clan's room (heard by its members) or to a single player's private room —
+ * never a resource balance to everyone.
  */
 export async function emit(g: Ctx, room: string, event: RealtimeEventName, payload: Record<string, unknown> = {}): Promise<void> {
   await g.tx.query('INSERT INTO realtime_events (room, event, payload, created_at) VALUES ($1, $2, $3, $4)', [
@@ -21,16 +23,18 @@ export async function emit(g: Ctx, room: string, event: RealtimeEventName, paylo
   ]);
 }
 
-async function playerOfClan(tx: Db, clanId: string | null): Promise<string | null> {
-  if (!clanId) return null;
-  const row = await one<{ player_id: string | null }>(tx, 'SELECT player_id FROM clans WHERE id = $1', [clanId]);
-  return row?.player_id ?? null;
+/** The players who belong to a clan. Empty for NPC clans. */
+export async function memberIds(tx: Db, clanId: string | null): Promise<string[]> {
+  if (!clanId) return [];
+  const res = await rows<{ player_id: string }>(tx, 'SELECT player_id FROM clan_members WHERE clan_id = $1', [clanId]);
+  return res.map((r) => r.player_id);
 }
 
-/** Emit to the human player behind a clan, if there is one (NPC clans have no room). */
+/** Emit to the members of a clan (NPC clans have nobody listening, so nothing is queued). */
 export async function emitClan(g: Ctx, clanId: string | null, event: RealtimeEventName, payload: Record<string, unknown> = {}): Promise<void> {
-  const playerId = await playerOfClan(g.tx, clanId);
-  if (playerId) await emit(g, playerRoom(playerId), event, payload);
+  if (!clanId) return;
+  if (!(await one(g.tx, 'SELECT 1 FROM clan_members WHERE clan_id = $1 LIMIT 1', [clanId]))) return;
+  await emit(g, clanRoom(clanId), event, payload);
 }
 
 export interface NotificationInput {
@@ -56,9 +60,37 @@ export async function notifyPlayer(g: Ctx, playerId: string, n: NotificationInpu
   });
 }
 
-export async function notifyClan(g: Ctx, clanId: string | null, n: NotificationInput): Promise<void> {
-  const playerId = await playerOfClan(g.tx, clanId);
-  if (playerId) await notifyPlayer(g, playerId, n);
+/** Notify every member of a clan. `except` leaves out the member who caused the news. */
+export async function notifyClan(g: Ctx, clanId: string | null, n: NotificationInput, except?: string | null): Promise<void> {
+  for (const playerId of await memberIds(g.tx, clanId)) {
+    if (playerId === except) continue;
+    await notifyPlayer(g, playerId, n);
+  }
+}
+
+/** Notify the members of a clan whose role holds a permission (and always the leader). */
+export async function notifyClanRoles(g: Ctx, clanId: string, permission: string, n: NotificationInput): Promise<void> {
+  const res = await rows<{ player_id: string }>(
+    g.tx,
+    `SELECT m.player_id FROM clan_members m
+      WHERE m.clan_id = $1
+        AND (m.role = 'leader' OR EXISTS (
+              SELECT 1 FROM clan_role_permissions p WHERE p.clan_id = m.clan_id AND p.role = m.role AND p.permission = $2))`,
+    [clanId, permission],
+  );
+  for (const r of res) await notifyPlayer(g, r.player_id, n);
+}
+
+/** Append to the clan's activity history and tell its members. */
+export async function clanActivity(g: Ctx & { actorPlayerId?: string | null }, clanId: string, type: string, body: string): Promise<void> {
+  await g.tx.query('INSERT INTO clan_activity (clan_id, actor_player_id, type, body, created_at) VALUES ($1, $2, $3, $4, $5)', [
+    clanId,
+    g.actorPlayerId ?? null,
+    type,
+    body,
+    g.now,
+  ]);
+  await emit(g, clanRoom(clanId), 'clan:updated', { clanId, type });
 }
 
 export interface ChronicleInput {

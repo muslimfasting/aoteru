@@ -17,7 +17,7 @@ export async function transferProvince(
   g: G,
   province: ProvinceRow,
   toClanId: string | null,
-  reason: 'conquest' | 'founding' | 'rebellion',
+  reason: 'conquest' | 'founding' | 'rebellion' | 'abandoned',
   battleId: string | null = null,
   loyalty?: number,
 ): Promise<void> {
@@ -57,7 +57,7 @@ export async function transferProvince(
 
 async function handleLoss(g: G, clanId: string, lost: ProvinceRow): Promise<void> {
   const clan = await one<ClanRow>(g.tx, 'SELECT * FROM clans WHERE id = $1 FOR UPDATE', [clanId]);
-  if (!clan) return;
+  if (!clan || clan.status === 'disbanded') return;
   const remaining = await rows<ProvinceRow>(g.tx, 'SELECT * FROM provinces WHERE owner_clan_id = $1 ORDER BY population DESC, code', [clanId]);
   if (remaining.length === 0) {
     await clanFalls(g, clan, lost);
@@ -100,8 +100,8 @@ async function clanFalls(g: G, clan: ClanRow, lastProvince: ProvinceRow): Promis
   await notifyClan(g, clan.id, {
     type: 'province',
     title: 'Your clan has fallen',
-    body: 'Your last province is lost. Your Daimyo keeps everything learned in the Five Pillars and may found a new seat in any unclaimed starting province.',
-    link: '/found',
+    body: 'Your last province is lost. Everyone keeps what they have learned in the Five Pillars. The leader may found a new seat in any unclaimed starting province; members may also leave for another clan.',
+    link: '/game/clan',
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { clanId: clan.id });
 }

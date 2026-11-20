@@ -29,7 +29,7 @@ import { one, rows, type Db } from './db';
 import { conflict, forbidden, invalid, notFound } from './errors';
 import { getResources, spend } from './economy';
 import { audit, emit, emitClan, notifyClan, WORLD_ROOM } from './notify';
-import { awardXp } from './progression';
+import { awardClanXp } from './progression';
 import {
   atWar,
   levelsByProvince,
@@ -123,7 +123,7 @@ export async function completeRecruitment(g: G, orderId: string): Promise<void> 
   const garrisonId = await ensureGarrison(g.tx, province.id, order.clan_id);
   await addUnitsToArmy(g.tx, garrisonId, { [order.unit_type]: order.count });
   const mods = await loadMods(g.tx, order.clan_id);
-  await awardXp(g, order.clan_id, 'military', UNITS[order.unit_type].xp * order.count, mods.xpGain);
+  await awardClanXp(g, order.clan_id, 'military', UNITS[order.unit_type].xp * order.count, mods.xpGain);
   await notifyClan(g, order.clan_id, {
     type: 'recruitment',
     title: `${order.count} ${UNITS[order.unit_type].name} ready`,
@@ -217,6 +217,8 @@ export async function planMarch(
 export async function dispatchArmy(
   g: G,
   clan: ClanRow,
+  /** The member leading the army; null for NPC clans. */
+  commanderId: string | null,
   fromId: string,
   toId: string,
   unitsInput: Partial<Record<string, number>>,
@@ -243,9 +245,9 @@ export async function dispatchArmy(
   const arrivesAt = addMs(g.now, gameMs(g, plan.minutes));
   const army = await one<{ id: string }>(
     g.tx,
-    `INSERT INTO armies (clan_id, province_id, status, intent, target_province_id, path, departed_at, arrives_at)
-     VALUES ($1, $2, 'marching', $3, $4, $5, $6, $7) RETURNING id`,
-    [clan.id, plan.from.id, plan.intent, plan.target.id, JSON.stringify(plan.route.map((p) => p.id)), g.now, arrivesAt],
+    `INSERT INTO armies (clan_id, province_id, status, intent, target_province_id, path, departed_at, arrives_at, commander_player_id)
+     VALUES ($1, $2, 'marching', $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [clan.id, plan.from.id, plan.intent, plan.target.id, JSON.stringify(plan.route.map((p) => p.id)), g.now, arrivesAt, commanderId],
   );
   await addUnitsToArmy(g.tx, army!.id, plan.units);
   if (plan.supplies > 0) await spend(g, clan.id, { food: plan.supplies }, 'march_supplies', { type: 'army', id: army!.id });

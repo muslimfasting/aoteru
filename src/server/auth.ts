@@ -1,9 +1,12 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { PlayerDTO } from '@/game/api';
-import { NAME_RULES } from '@/game/config';
+import { CLAN_PERMISSIONS, type ClanPermission, type ClanRole } from '@/game/clan';
+import { NAME_RULES, PORTRAITS } from '@/game/config';
 import { one, withTx, type Db } from './db';
 import { GameError, conflict, invalid } from './errors';
+import { initPlayerPillars } from './progression';
+import { openPurse } from './purse';
 import type { ClanRow } from './rows';
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
@@ -73,8 +76,8 @@ export function validateNickname(nickname: string): string {
   return n;
 }
 
-function toPlayer(row: { id: string; nickname: string; email: string; created_at: Date }): PlayerDTO {
-  return { id: row.id, nickname: row.nickname, email: row.email, createdAt: row.created_at.toISOString() };
+function toPlayer(row: { id: string; nickname: string; email: string; portrait: string; created_at: Date }): PlayerDTO {
+  return { id: row.id, nickname: row.nickname, email: row.email, portrait: row.portrait, createdAt: row.created_at.toISOString() };
 }
 
 export async function register(
@@ -101,11 +104,15 @@ export async function register(
         email,
         passwordHash,
       ]);
-      const player = await one<{ id: string; nickname: string; created_at: Date }>(
+      // A face to start with; it can be changed in the profile.
+      const portrait = PORTRAITS[(nickname.length + nickname.charCodeAt(0)) % PORTRAITS.length].id;
+      const player = await one<{ id: string; nickname: string; portrait: string; created_at: Date }>(
         tx,
-        'INSERT INTO players (user_id, nickname) VALUES ($1, $2) RETURNING id, nickname, created_at',
-        [user!.id, nickname],
+        'INSERT INTO players (user_id, nickname, portrait) VALUES ($1, $2, $3) RETURNING id, nickname, portrait, created_at',
+        [user!.id, nickname, portrait],
       );
+      await initPlayerPillars(tx, player!.id);
+      await openPurse(tx, player!.id);
       const token = await createSession(tx, user!.id, meta);
       await tx.query(`INSERT INTO audit_logs (actor_player_id, action, entity_type, entity_id, data, created_at) VALUES ($1::uuid, 'auth.register', 'player', $1::text, '{}', now())`, [
         player!.id,
@@ -121,10 +128,11 @@ export async function register(
 
 export async function login(input: { email: string; password: string }, meta: RequestMeta, db: Db): Promise<{ player: PlayerDTO; token: string; hasClan: boolean }> {
   const email = input.email.trim().toLowerCase();
-  const row = await one<{ user_id: string; password_hash: string; id: string; nickname: string; created_at: Date; clan_status: string | null }>(
+  const row = await one<{ user_id: string; password_hash: string; id: string; nickname: string; portrait: string; created_at: Date; clan_status: string | null }>(
     db,
-    `SELECT u.id AS user_id, u.password_hash, p.id, p.nickname, p.created_at, c.status AS clan_status
-       FROM users u JOIN players p ON p.user_id = u.id LEFT JOIN clans c ON c.player_id = p.id
+    `SELECT u.id AS user_id, u.password_hash, p.id, p.nickname, p.portrait, p.created_at, c.status AS clan_status
+       FROM users u JOIN players p ON p.user_id = u.id
+       LEFT JOIN clan_members m ON m.player_id = p.id LEFT JOIN clans c ON c.id = m.clan_id
       WHERE lower(u.email) = $1`,
     [email],
   );
@@ -140,37 +148,63 @@ export async function logout(db: Db, token: string | null): Promise<void> {
   if (token) await db.query('UPDATE sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(token)]);
 }
 
+export interface Membership {
+  clanId: string;
+  role: ClanRole;
+  /** What this member's role may do in the clan right now. */
+  permissions: ClanPermission[];
+  joinedAt: Date;
+}
+
 export interface Session {
   userId: string;
   player: PlayerDTO;
-  /** The player's clan row, if they have founded one (it may be fallen). */
+  /** The clan the player belongs to, if any (it may have fallen). */
   clan: ClanRow | null;
+  member: Membership | null;
 }
 
-/** Resolve a session token to the player and their clan in one query. */
+function reviveClan(raw: any): ClanRow {
+  const date = (v: unknown) => (v ? new Date(v as string) : null);
+  return {
+    ...raw,
+    protected_until: date(raw.protected_until),
+    created_at: new Date(raw.created_at),
+    doctrine_set_at: date(raw.doctrine_set_at),
+    announcement_at: date(raw.announcement_at),
+  };
+}
+
+/** Resolve a session token to the player, their clan and their role in it, in one query. */
 export async function authenticate(db: Db, token: string | null): Promise<Session | null> {
   if (!token) return null;
   const row = await one<any>(
     db,
-    `SELECT u.id AS user_id, u.email, p.id AS player_id, p.nickname, p.created_at AS player_created_at, to_jsonb(c.*) AS clan
+    `SELECT u.id AS user_id, u.email, p.id AS player_id, p.nickname, p.portrait, p.created_at AS player_created_at,
+            to_jsonb(c.*) AS clan, m.role, m.joined_at,
+            COALESCE((SELECT array_agg(rp.permission) FROM clan_role_permissions rp WHERE rp.clan_id = m.clan_id AND rp.role = m.role), '{}') AS permissions
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        JOIN players p ON p.user_id = u.id
-       LEFT JOIN clans c ON c.player_id = p.id
+       LEFT JOIN clan_members m ON m.player_id = p.id
+       LEFT JOIN clans c ON c.id = m.clan_id
       WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
     [hashToken(token)],
   );
   if (!row) return null;
-  const clan: ClanRow | null = row.clan
+  const clan: ClanRow | null = row.clan ? reviveClan(row.clan) : null;
+  const member: Membership | null = clan
     ? {
-        ...row.clan,
-        protected_until: row.clan.protected_until ? new Date(row.clan.protected_until) : null,
-        created_at: new Date(row.clan.created_at),
+        clanId: clan.id,
+        role: row.role,
+        permissions: row.role === 'leader' ? [...CLAN_PERMISSIONS] : (row.permissions as ClanPermission[]),
+        joinedAt: row.joined_at,
       }
     : null;
   return {
     userId: row.user_id,
-    player: { id: row.player_id, nickname: row.nickname, email: row.email, createdAt: row.player_created_at.toISOString() },
+    player: { id: row.player_id, nickname: row.nickname, email: row.email, portrait: row.portrait, createdAt: row.player_created_at.toISOString() },
     clan,
+    member,
   };
 }

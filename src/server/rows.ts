@@ -13,11 +13,13 @@ import {
   type Terrain,
   type UnitCounts,
 } from '@/game/config';
-import { PILLARS, computeModifiers, emptyModifiers, type Modifiers, type PillarId, type SkillRanks } from '@/game/pillars';
+import { SEAT_OF_PILLAR, type ClanRole, type RecruitmentMode } from '@/game/clan';
+import { PILLARS, SKILLS, computeModifiers, emptyModifiers, type Modifiers, type PillarId, type SkillRanks } from '@/game/pillars';
 import { rows, type Db } from './db';
 
 export interface ClanRow {
   id: string;
+  /** The leader. Null for NPC clans and for disbanded clans. */
   player_id: string | null;
   npc_key: string | null;
   name: string;
@@ -27,11 +29,28 @@ export interface ClanRow {
   banner_mon: string;
   is_npc: boolean;
   personality: string | null;
-  status: 'active' | 'fallen';
+  status: 'active' | 'fallen' | 'disbanded';
   capital_province_id: string | null;
   protected_until: Date | null;
   starving_ticks: number;
   created_at: Date;
+  tag: string;
+  description: string;
+  recruitment: RecruitmentMode;
+  language: string;
+  doctrine: string | null;
+  doctrine_set_at: Date | null;
+  announcement: string | null;
+  announcement_at: Date | null;
+  announcement_by: string | null;
+}
+
+export interface MemberRow {
+  player_id: string;
+  clan_id: string;
+  role: ClanRole;
+  joined_at: Date;
+  contribution: number;
 }
 
 export interface ProvinceRow {
@@ -74,6 +93,8 @@ export interface ArmyRow {
   path: string[] | null;
   departed_at: Date | null;
   arrives_at: Date | null;
+  /** The member who led this army out, if any. */
+  commander_player_id: string | null;
   units: UnitCounts;
 }
 
@@ -136,7 +157,7 @@ export function levelsByProvince(buildings: BuildingRow[]): Map<string, Building
 
 const ARMY_SELECT = `
   SELECT a.id, a.clan_id, a.province_id, a.status, a.intent, a.target_province_id, a.path,
-         a.departed_at, a.arrives_at,
+         a.departed_at, a.arrives_at, a.commander_player_id,
          COALESCE(jsonb_object_agg(u.unit_type, u.count) FILTER (WHERE u.unit_type IS NOT NULL), '{}'::jsonb) AS units
   FROM armies a
   LEFT JOIN army_units u ON u.army_id = a.id`;
@@ -168,10 +189,81 @@ export interface ClanProgress {
   ranks: SkillRanks;
   mods: Modifiers;
   pillarTotal: number;
+  /** Which member carries each pillar for the clan (human clans only). */
+  seats: Partial<Record<PillarId, string>>;
 }
 
-/** Pillar levels, skill ranks and the resulting modifiers for every clan (or one). */
-export async function loadProgress(db: Db, clanId?: string): Promise<Map<string, ClanProgress>> {
+export interface PlayerProgress {
+  levels: Record<PillarId, number>;
+  ranks: SkillRanks;
+}
+
+const baseLevels = (): Record<PillarId, number> => ({ military: 1, leadership: 1, economy: 1, intelligence: 1, culture: 1 });
+
+/** Pillar levels and skill ranks of the given players. */
+export async function loadPlayerProgress(db: Db, playerIds: string[]): Promise<Map<string, PlayerProgress>> {
+  const out = new Map<string, PlayerProgress>();
+  for (const id of playerIds) out.set(id, { levels: baseLevels(), ranks: {} });
+  if (playerIds.length === 0) return out;
+  const pillarRows = await rows<{ player_id: string; pillar: PillarId; level: number }>(
+    db,
+    'SELECT player_id, pillar, level FROM player_pillars WHERE player_id = ANY($1)',
+    [playerIds],
+  );
+  const skillRows = await rows<{ player_id: string; skill_code: string; rank: number }>(
+    db,
+    'SELECT player_id, skill_code, rank FROM player_skill_ranks WHERE player_id = ANY($1)',
+    [playerIds],
+  );
+  for (const r of pillarRows) out.get(r.player_id)!.levels[r.pillar] = r.level;
+  for (const r of skillRows) out.get(r.player_id)!.ranks[r.skill_code] = r.rank;
+  return out;
+}
+
+/**
+ * The clan's standing in the Five Pillars, put together from its council:
+ * each pillar is carried by the strongest of the members holding its seat and
+ * the leader. `commanderId`, when given, carries the Military pillar instead —
+ * the member leading an army fights with their own skill, not the General's.
+ */
+export function composeProgress(
+  members: { player_id: string; role: ClanRole }[],
+  people: Map<string, PlayerProgress>,
+  commanderId?: string | null,
+): ClanProgress {
+  const progress: ClanProgress = { levels: baseLevels(), ranks: {}, mods: emptyModifiers(), pillarTotal: PILLARS.length, seats: {} };
+  for (const pillar of PILLARS) {
+    const seat = SEAT_OF_PILLAR[pillar];
+    let candidates = members.filter((m) => m.role === seat || m.role === 'leader');
+    if (pillar === 'military' && commanderId && members.some((m) => m.player_id === commanderId)) {
+      candidates = members.filter((m) => m.player_id === commanderId);
+    }
+    let best: string | null = null;
+    for (const m of candidates) {
+      const level = people.get(m.player_id)?.levels[pillar] ?? 1;
+      if (best === null || level > (people.get(best)?.levels[pillar] ?? 1)) best = m.player_id;
+    }
+    if (!best) continue;
+    const holder = people.get(best);
+    progress.levels[pillar] = holder?.levels[pillar] ?? 1;
+    progress.seats[pillar] = best;
+    for (const skill of SKILLS) {
+      if (skill.pillar !== pillar) continue;
+      const rank = holder?.ranks[skill.code] ?? 0;
+      if (rank > 0) progress.ranks[skill.code] = rank;
+    }
+  }
+  progress.mods = computeModifiers(progress.levels, progress.ranks);
+  progress.pillarTotal = PILLARS.reduce((sum, id) => sum + progress.levels[id], 0);
+  return progress;
+}
+
+/**
+ * Pillar levels, skill ranks and the resulting modifiers for every clan (or
+ * one). NPC clans have their own rows; clans of players are composed from
+ * their council seats.
+ */
+export async function loadProgress(db: Db, clanId?: string, commanderId?: string | null): Promise<Map<string, ClanProgress>> {
   const filter = clanId ? 'WHERE clan_id = $1' : '';
   const params = clanId ? [clanId] : [];
   const pillarRows = await rows<PillarRow>(db, `SELECT clan_id, pillar, level, xp, points FROM five_pillars ${filter}`, params);
@@ -184,12 +276,7 @@ export async function loadProgress(db: Db, clanId?: string): Promise<Map<string,
   const ensure = (id: string): ClanProgress => {
     let p = out.get(id);
     if (!p) {
-      p = {
-        levels: { military: 1, leadership: 1, economy: 1, intelligence: 1, culture: 1 },
-        ranks: {},
-        mods: emptyModifiers(),
-        pillarTotal: PILLARS.length,
-      };
+      p = { levels: baseLevels(), ranks: {}, mods: emptyModifiers(), pillarTotal: PILLARS.length, seats: {} };
       out.set(id, p);
     }
     return p;
@@ -200,13 +287,34 @@ export async function loadProgress(db: Db, clanId?: string): Promise<Map<string,
     p.mods = computeModifiers(p.levels, p.ranks);
     p.pillarTotal = PILLARS.reduce((sum, id) => sum + p.levels[id], 0);
   }
+
+  const members = await rows<{ clan_id: string; player_id: string; role: ClanRole }>(
+    db,
+    `SELECT clan_id, player_id, role FROM clan_members ${filter}`,
+    params,
+  );
+  if (members.length > 0) {
+    const people = await loadPlayerProgress(db, members.map((m) => m.player_id));
+    const byClan = new Map<string, typeof members>();
+    for (const m of members) {
+      const list = byClan.get(m.clan_id) ?? [];
+      list.push(m);
+      byClan.set(m.clan_id, list);
+    }
+    for (const [id, list] of byClan) out.set(id, composeProgress(list, people, commanderId));
+  }
   return out;
 }
 
-export async function loadMods(db: Db, clanId: string | null): Promise<Modifiers> {
+/** The clan's modifiers. With `commanderId`, the Military pillar is that member's own. */
+export async function loadMods(db: Db, clanId: string | null, commanderId?: string | null): Promise<Modifiers> {
   if (!clanId) return emptyModifiers();
-  const progress = await loadProgress(db, clanId);
+  const progress = await loadProgress(db, clanId, commanderId);
   return progress.get(clanId)?.mods ?? emptyModifiers();
+}
+
+export async function loadMembers(db: Db, clanId: string): Promise<MemberRow[]> {
+  return rows<MemberRow>(db, 'SELECT player_id, clan_id, role, joined_at, contribution FROM clan_members WHERE clan_id = $1 ORDER BY joined_at, player_id', [clanId]);
 }
 
 export async function loadActiveWars(db: Db): Promise<WarRow[]> {

@@ -71,7 +71,7 @@ import { clanIncome, clanUnits, getResources, provinceOutput } from './economy';
 import { forbidden, notFound } from './errors';
 import { freshIntel, scoutBlockReason, scoutOdds } from './espionage';
 import { MAX_RECRUIT_ORDER, MIN_POPULATION } from './military';
-import { playerRoom, WORLD_ROOM } from './notify';
+import { clanRoom, playerRoom, WORLD_ROOM } from './notify';
 import {
   atWar,
   eventMultipliers,
@@ -92,12 +92,16 @@ import {
   type WorldEventRow,
 } from './rows';
 import { addMs, gameMs, loadWorldState, worldMeta, type WorldStateRow } from './world';
+import type { Membership } from './auth';
+import { buildPersonal, buildPlayerRanking, membershipDTO, unreadMessages } from './clanviews';
+import { getPurse } from './purse';
 
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
 export interface Viewer {
   player: PlayerDTO;
   clan: ClanRow | null;
+  member: Membership | null;
 }
 
 function activeClan(viewer: Viewer): ClanRow | null {
@@ -113,11 +117,12 @@ interface ClanStats {
   score: number;
 }
 
-interface WorldView {
+export interface WorldView {
   now: Date;
   state: WorldStateRow;
   clans: ClanRow[];
   nicknames: Map<string, string>;
+  memberCounts: Map<string, number>;
   provinces: ProvinceRow[];
   buildings: BuildingRow[];
   levels: ReturnType<typeof levelsByProvince>;
@@ -137,7 +142,11 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
   const [state, clans, nickRows, provinces, buildings, armies, progress, wars] = await Promise.all([
     requireState(db),
     loadClans(db),
-    rows<{ clan_id: string; nickname: string }>(db, 'SELECT c.id AS clan_id, p.nickname FROM clans c JOIN players p ON p.id = c.player_id'),
+    rows<{ clan_id: string; nickname: string; members: number }>(
+      db,
+      `SELECT c.id AS clan_id, p.nickname, (SELECT COUNT(*)::int FROM clan_members m WHERE m.clan_id = c.id) AS members
+         FROM clans c JOIN players p ON p.id = c.player_id`,
+    ),
     loadProvinces(db),
     loadBuildings(db),
     loadArmies(db),
@@ -167,6 +176,7 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
     state,
     clans,
     nicknames: new Map(nickRows.map((r) => [r.clan_id, r.nickname])),
+    memberCounts: new Map(nickRows.map((r) => [r.clan_id, r.members])),
     provinces,
     buildings,
     levels: levelsByProvince(buildings),
@@ -177,7 +187,7 @@ export async function loadWorldView(db: Db, now: Date): Promise<WorldView> {
   };
 }
 
-function clanPublic(view: WorldView, clan: ClanRow): ClanPublicDTO {
+export function clanPublic(view: WorldView, clan: ClanRow): ClanPublicDTO {
   const stats = view.stats.get(clan.id);
   return {
     id: clan.id,
@@ -187,6 +197,11 @@ function clanPublic(view: WorldView, clan: ClanRow): ClanPublicDTO {
     banner: { color: clan.banner_color, mon: clan.banner_mon },
     isNpc: clan.is_npc,
     playerNickname: view.nicknames.get(clan.id) ?? null,
+    tag: clan.tag,
+    description: clan.description,
+    recruitment: clan.recruitment,
+    language: clan.language,
+    memberCount: view.memberCounts.get(clan.id) ?? 0,
     status: clan.status,
     provinceCount: stats?.provinceCount ?? 0,
     capitalProvinceId: clan.capital_province_id,
@@ -195,7 +210,7 @@ function clanPublic(view: WorldView, clan: ClanRow): ClanPublicDTO {
   };
 }
 
-function ranking(view: WorldView): ClanRow[] {
+export function ranking(view: WorldView): ClanRow[] {
   return view.clans
     .filter((c) => c.status === 'active')
     .sort((a, b) => (view.stats.get(b.id)?.score ?? 0) - (view.stats.get(a.id)?.score ?? 0) || a.name.localeCompare(b.name));
@@ -206,7 +221,7 @@ async function unreadCount(db: Db, playerId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-async function clanSelf(db: Db, view: WorldView, clan: ClanRow): Promise<ClanSelfDTO> {
+export async function clanSelf(db: Db, view: WorldView, clan: ClanRow): Promise<ClanSelfDTO> {
   const own = view.provinces.filter((p) => p.owner_clan_id === clan.id);
   const mine = view.armies.filter((a) => a.clan_id === clan.id);
   const mods = view.progress.get(clan.id)?.mods ?? emptyModifiers();
@@ -235,11 +250,18 @@ async function clanSelf(db: Db, view: WorldView, clan: ClanRow): Promise<ClanSel
 
 export async function buildMe(db: Db, viewer: Viewer, now: Date): Promise<MeResponse> {
   const view = await loadWorldView(db, now);
+  const invites = await one<{ n: number }>(db, `SELECT COUNT(*)::int AS n FROM clan_invitations WHERE player_id = $1 AND status = 'pending'`, [
+    viewer.player.id,
+  ]);
   return {
     player: viewer.player,
     clan: viewer.clan ? await clanSelf(db, view, viewer.clan) : null,
+    membership: membershipDTO(viewer.member),
+    personal: await buildPersonal(db, viewer),
     world: worldMeta(view.state, now),
     unreadNotifications: await unreadCount(db, viewer.player.id),
+    unreadMessages: await unreadMessages(db, viewer),
+    pendingInvitations: invites?.n ?? 0,
   };
 }
 
@@ -721,6 +743,7 @@ export async function buildLeaderboard(db: Db, viewer: Viewer, now: Date): Promi
         isViewer: viewer.clan?.id === clan.id,
       };
     }),
+    players: await buildPlayerRanking(db, viewer),
   };
 }
 
@@ -740,44 +763,17 @@ export async function buildNotifications(db: Db, playerId: string): Promise<Noti
   };
 }
 
-const CHAT_SELECT = `
-  SELECT m.id, m.clan_id, m.body, m.created_at, COALESCE(c.name, 'Wanderer') AS clan_name,
-         COALESCE(p.nickname, 'unknown') AS nickname, COALESCE(c.banner_color, 'slate') AS banner_color
-    FROM chat_messages m LEFT JOIN clans c ON c.id = m.clan_id LEFT JOIN players p ON p.id = m.player_id`;
-
-function toChat(m: any): ChatMessageDTO {
-  return {
-    id: m.id,
-    clanId: m.clan_id,
-    clanName: m.clan_name,
-    nickname: m.nickname,
-    bannerColor: m.banner_color,
-    body: m.body,
-    createdAt: m.created_at.toISOString(),
-  };
-}
-
-export async function buildChat(db: Db): Promise<ChatResponse> {
-  const res = await rows<any>(db, `${CHAT_SELECT} WHERE m.channel = 'world' ORDER BY m.id DESC LIMIT 80`);
-  return { messages: res.reverse().map(toChat) };
-}
-
-export async function buildChatMessage(db: Db, id: number): Promise<ChatMessageDTO> {
-  const m = await one<any>(db, `${CHAT_SELECT} WHERE m.id = $1`, [id]);
-  if (!m) throw notFound('Message');
-  return toChat(m);
-}
-
 export async function currentWorldMeta(db: Db, now: Date): Promise<WorldMetaDTO> {
   return worldMeta(await requireState(db), now);
 }
 
 /**
  * Realtime delivery by polling. A client only ever receives events from the
- * shared world room and from its own private room (authorised rooms, GDD §16).
+ * shared world room, its clan's room and its own private room (authorised rooms, GDD §16).
  */
 export async function buildSync(db: Db, viewer: Viewer, cursor: number | null, now: Date): Promise<SyncResponse> {
   const rooms = [WORLD_ROOM, playerRoom(viewer.player.id)];
+  if (viewer.clan) rooms.push(clanRoom(viewer.clan.id));
   const head = await one<{ id: number }>(db, 'SELECT COALESCE(MAX(id), 0) AS id FROM realtime_events');
   let events: RealtimeEventDTO[] = [];
   let next = head?.id ?? 0;
@@ -800,6 +796,8 @@ export async function buildSync(db: Db, viewer: Viewer, cursor: number | null, n
     events,
     world: await currentWorldMeta(db, now),
     resources,
+    purse: await getPurse(db, viewer.player.id),
     unreadNotifications: await unreadCount(db, viewer.player.id),
+    unreadMessages: await unreadMessages(db, viewer),
   };
 }

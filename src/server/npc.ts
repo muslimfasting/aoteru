@@ -108,7 +108,7 @@ export async function runNpcTurn(g: G, clan: ClanRow): Promise<void> {
     if (foreignNeighbors(p).length > 0 || p.id === weakestBorder.id) continue;
     const garrison = garrisonOf(p.id, clan.id);
     if (!garrison || totalUnits(garrison.units) < 40) continue;
-    await attempt(g, () => dispatchArmy(g, clan, p.id, weakestBorder.id, scaleUnits(garrison.units, 0.7), 'move'));
+    await attempt(g, () => dispatchArmy(g, clan, null, p.id, weakestBorder.id, scaleUnits(garrison.units, 0.7), 'move'));
   }
 
   // 2. Maintain food reserves: know whether the granaries can carry more mouths.
@@ -232,7 +232,7 @@ export async function runNpcTurn(g: G, clan: ClanRow): Promise<void> {
     // The campaign must not starve the clan: check supplies against the hourly balance.
     const upkeep = armyUpkeep(plan.units, mods.upkeep);
     if (stock.food > upkeep.food * 6) {
-      await attempt(g, () => dispatchArmy(g, clan, plan.from.id, plan.to.id, plan.units, 'attack'));
+      await attempt(g, () => dispatchArmy(g, clan, null, plan.from.id, plan.to.id, plan.units, 'attack'));
     }
   }
 }

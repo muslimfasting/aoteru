@@ -7,7 +7,7 @@ import { buildMovement } from '@/server/views';
 export const dynamic = 'force-dynamic';
 
 /** POST /api/army/move — march troops between provinces you hold. */
-export const POST = clanRoute({ body: marchBody, mutation: true }, async (ctx) => {
-  const armyId = await act(ctx, (g, clan) => dispatchArmy(g, clan, ctx.body.fromProvinceId, ctx.body.toProvinceId, ctx.body.units, 'move'));
+export const POST = clanRoute({ body: marchBody, mutation: true, permission: 'command' }, async (ctx) => {
+  const armyId = await act(ctx, (g, clan, member) => dispatchArmy(g, clan, member.player_id, ctx.body.fromProvinceId, ctx.body.toProvinceId, ctx.body.units, 'move'), 'command');
   return { movement: await buildMovement(pool(), ctx.clan.id, armyId) };
 });

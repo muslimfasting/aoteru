@@ -7,7 +7,7 @@ import { buildDiplomacy } from '@/server/views';
 export const dynamic = 'force-dynamic';
 
 /** POST /api/wars/declare */
-export const POST = clanRoute({ body: declareWarBody, mutation: true }, async (ctx) => {
-  await act(ctx, (g, clan) => declareWar(g, clan, ctx.body.clanId));
+export const POST = clanRoute({ body: declareWarBody, mutation: true, permission: 'diplomacy' }, async (ctx) => {
+  await act(ctx, (g, clan) => declareWar(g, clan, ctx.body.clanId), 'diplomacy');
   return buildDiplomacy(pool(), ctx.clan, new Date());
 });
