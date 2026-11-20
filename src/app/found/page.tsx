@@ -1,13 +1,15 @@
 'use client';
 
 /**
- * Character and clan creation: name the Daimyo, choose a portrait, design the
- * banner and pick the province where the clan begins. Also used to rise again
- * after a clan has fallen.
+ * Founding a nation: name it and its head of government, choose its tag, flag
+ * and recruitment rules, and pick the province for its capital. The head of a
+ * fallen nation uses the same screen to found its new capital.
  */
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import type { MeResponse, WorldMapResponse } from '@/game/api';
+import { CLAN_LANGUAGES, CLAN_RULES, RECRUITMENT_DEFS, RECRUITMENT_MODES, ROLE_DEFS, type RecruitmentMode } from '@/game/clan';
 import { BANNER_COLORS, BANNER_MONS, NAME_RULES, PORTRAITS, RESOURCE_INFO, RESOURCE_KEYS, TERRAIN_INFO, WORLD } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
 import { FormField } from '@/components/AuthShell';
@@ -39,6 +41,11 @@ export default function FoundPage() {
 
   const [daimyoName, setDaimyoName] = useState('');
   const [clanName, setClanName] = useState('');
+  const [tag, setTag] = useState('');
+  const [tagEdited, setTagEdited] = useState(false);
+  const [description, setDescription] = useState('');
+  const [recruitment, setRecruitment] = useState<RecruitmentMode>('application');
+  const [language, setLanguage] = useState<string>('en');
   const [portrait, setPortrait] = useState<string>(PORTRAITS[0].id);
   const [color, setColor] = useState<string>(BANNER_COLORS[0].id);
   const [mon, setMon] = useState<string>(BANNER_MONS[0].id);
@@ -56,14 +63,27 @@ export default function FoundPage() {
           router.replace('/game');
           return;
         }
+        // Only the head of a fallen nation founds its new capital; its other officials wait or leave.
+        if (res.clan && res.membership?.role !== 'leader') {
+          router.replace('/game/clan');
+          return;
+        }
         setMe(res);
+        setPortrait(res.player.portrait);
         if (res.clan) {
           // Rising again: start from the old identity.
           setDaimyoName(res.clan.daimyoName);
           setClanName(res.clan.name);
+          setTag(res.clan.tag);
+          setTagEdited(true);
+          setDescription(res.clan.description);
+          setRecruitment(res.clan.recruitment);
+          setLanguage(res.clan.language);
           setPortrait(res.clan.portrait);
           setColor(res.clan.banner.color);
           setMon(res.clan.banner.mon);
+        } else {
+          setDaimyoName(res.player.nickname.replace(/_/g, ' '));
         }
       })
       .catch((err) => {
@@ -89,11 +109,25 @@ export default function FoundPage() {
   }, [map.data, takenColors, color, provinceId, slots]);
 
   const daimyoErr = nameError(daimyoName, NAME_RULES.daimyoName, 'The name');
-  const clanErr = nameError(clanName, NAME_RULES.clanName, 'The clan name');
+  const clanErr = nameError(clanName, NAME_RULES.clanName, 'The name of the nation');
+  const cleanTag = tag.trim().toUpperCase();
+  const tagErr =
+    cleanTag.length < CLAN_RULES.tag.min || cleanTag.length > CLAN_RULES.tag.max
+      ? `The tag must be ${CLAN_RULES.tag.min}–${CLAN_RULES.tag.max} characters.`
+      : CLAN_RULES.tag.pattern.test(cleanTag)
+        ? null
+        : 'Letters and numbers only.';
+  const tagTaken = (map.data?.clans ?? []).some((c) => c.id !== me?.clan?.id && c.tag.toUpperCase() === cleanTag);
   const selected = slots.find((p) => p.id === provinceId) ?? null;
   const def = selected ? PROVINCE_BY_CODE[selected.code] : null;
 
-  const blocked = daimyoErr ?? clanErr ?? (takenColors.has(color) ? 'Another clan already flies that colour' : null) ?? (!provinceId ? 'Choose a province on the map' : null);
+  const blocked =
+    clanErr ??
+    tagErr ??
+    (tagTaken ? 'Another nation already uses that tag' : null) ??
+    daimyoErr ??
+    (takenColors.has(color) ? 'Another nation already flies that colour' : null) ??
+    (!provinceId ? 'Choose a province on the map' : null);
 
   const submit = async () => {
     setTouched(true);
@@ -103,13 +137,17 @@ export default function FoundPage() {
     try {
       await apiPost<MeResponse>('/api/clans', {
         clanName: clanName.trim(),
+        tag: cleanTag,
+        description: description.trim(),
+        recruitment,
+        language,
         daimyoName: daimyoName.trim(),
         portrait,
         bannerColor: color,
         bannerMon: mon,
         provinceId,
       });
-      toast.success(`The ${clanName.trim()} banner rises over ${selected?.name ?? 'your province'}.`);
+      toast.success(`The flag of ${clanName.trim()} rises over ${selected?.name ?? 'your province'}.`);
       router.replace('/game');
     } catch (err) {
       setError(errorMessage(err));
@@ -143,13 +181,22 @@ export default function FoundPage() {
       </header>
 
       <div className="mb-5">
-        <p className="heading-rule mb-2 max-w-sm">{fallen ? 'The house endures' : 'A new house is founded'}</p>
-        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">{fallen ? 'Rise again' : 'Found your clan'}</h1>
+        <p className="heading-rule mb-2 max-w-sm">{fallen ? 'The nation endures' : 'A new nation is founded'}</p>
+        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">{fallen ? 'Found a new capital' : 'Found your nation'}</h1>
         <p className="mt-1 max-w-2xl text-muted">
           {fallen
-            ? 'Your last province has fallen, but your Daimyo lives and keeps everything the Five Pillars taught. Raise the banner over new land.'
-            : 'Name your Daimyo, design the banner your soldiers will follow, and choose the province where your story begins.'}
+            ? 'Your nation has lost its last province, but its officials remain and keep everything the Five Pillars taught them. Raise the flag over new land.'
+            : `Name the nation, design the flag its soldiers will follow, decide who may join, and choose the province for its capital. You become its ${ROLE_DEFS.leader.name}; others can enter its service.`}
         </p>
+        {!fallen ? (
+          <p className="mt-2 text-sm text-muted">
+            Rather serve an existing nation?{' '}
+            <Link href="/game/clans" className="tap-link text-gold">
+              Browse the nations and join one
+            </Link>
+            .
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
@@ -158,12 +205,12 @@ export default function FoundPage() {
           <section className="panel p-4 sm:p-5">
             <h2 className="mb-3 flex items-center gap-2.5 font-display text-xl font-bold">
               <span className="seal seal-sm" aria-hidden>
-                <Glyph k="一" />
+                <Icon name="user" />
               </span>
-              Your Daimyo
+              The {ROLE_DEFS.leader.name}
             </h2>
-            <FormField label="Name" hint="The lord who rules in your name." error={touched ? daimyoErr : null}>
-              <input className="field" value={daimyoName} maxLength={NAME_RULES.daimyoName.max} onChange={(e) => setDaimyoName(e.target.value)} placeholder="e.g. Takeda Harunobu" autoComplete="off" />
+            <FormField label={`${ROLE_DEFS.leader.name}'s name`} hint="The name you are known by as head of government." error={touched ? daimyoErr : null}>
+              <input className="field" value={daimyoName} maxLength={NAME_RULES.daimyoName.max} onChange={(e) => setDaimyoName(e.target.value)} placeholder="e.g. Arisawa Kenji" autoComplete="off" />
             </FormField>
             <fieldset className="mt-4">
               <legend className="mb-2 text-sm font-bold">Portrait</legend>
@@ -191,14 +238,38 @@ export default function FoundPage() {
           <section className="panel p-4 sm:p-5">
             <h2 className="mb-3 flex items-center gap-2.5 font-display text-xl font-bold">
               <span className="seal seal-sm" aria-hidden>
-                <Glyph k="二" />
+                <Icon name="clan" />
               </span>
-              Your clan and banner
+              Your nation and flag
             </h2>
             <div className="flex gap-4">
               <div className="min-w-0 flex-1 space-y-4">
-                <FormField label="Clan name" hint="Must be unique in the realm." error={touched ? clanErr : null}>
-                  <input className="field" value={clanName} maxLength={NAME_RULES.clanName.max} onChange={(e) => setClanName(e.target.value)} placeholder="e.g. Kurogane" autoComplete="off" />
+                <FormField label="Name of the nation" hint="Must be unique in the realm." error={touched ? clanErr : null}>
+                  <input
+                    className="field"
+                    value={clanName}
+                    maxLength={NAME_RULES.clanName.max}
+                    onChange={(e) => {
+                      setClanName(e.target.value);
+                      // Suggest a tag from the name until the player types their own.
+                      if (!tagEdited) setTag(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase());
+                    }}
+                    placeholder="e.g. Kurogane"
+                    autoComplete="off"
+                  />
+                </FormField>
+                <FormField label="Tag" hint={`${CLAN_RULES.tag.min}–${CLAN_RULES.tag.max} letters or numbers, shown beside every official's name.`} error={touched ? (tagErr ?? (tagTaken ? 'Another nation already uses that tag.' : null)) : tagTaken ? 'Another nation already uses that tag.' : null}>
+                  <input
+                    className="field num !w-32 uppercase tracking-widest"
+                    value={tag}
+                    maxLength={CLAN_RULES.tag.max}
+                    onChange={(e) => {
+                      setTagEdited(true);
+                      setTag(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
+                    }}
+                    placeholder="KURO"
+                    autoComplete="off"
+                  />
                 </FormField>
                 <fieldset>
                   <legend className="mb-2 text-sm font-bold">Colour</legend>
@@ -212,8 +283,8 @@ export default function FoundPage() {
                           type="button"
                           role="radio"
                           aria-checked={active}
-                          aria-label={`${c.name}${taken ? ' (taken by another clan)' : ''}`}
-                          title={taken ? `${c.name} — flown by another clan` : c.name}
+                          aria-label={`${c.name}${taken ? ' (taken by another nation)' : ''}`}
+                          title={taken ? `${c.name} — flown by another nation` : c.name}
                           disabled={taken}
                           onClick={() => setColor(c.id)}
                           className={cx('relative h-11 w-11 rounded-[3px] border-2 transition-transform', active ? 'scale-105 border-gold-bright' : 'border-ink-950', taken && 'cursor-not-allowed opacity-30')}
@@ -249,23 +320,72 @@ export default function FoundPage() {
                 </fieldset>
               </div>
               <div className="flex shrink-0 flex-col items-center gap-2 pt-1">
-                <Banner color={color} mon={mon} size={150} title="Preview of your banner" />
-                <span className="text-[0.66rem] uppercase tracking-wider text-muted">Your banner</span>
+                <Banner color={color} mon={mon} size={150} title="Preview of your flag" />
+                <span className="text-[0.66rem] uppercase tracking-wider text-muted">Your flag</span>
               </div>
             </div>
           </section>
         </div>
 
         {/* province */}
-        <section className="panel flex flex-col p-4 sm:p-5">
+        <div className="flex flex-col gap-5">
+        <section className="panel p-4 sm:p-5">
+          <h2 className="mb-3 flex items-center gap-2.5 font-display text-xl font-bold">
+            <span className="seal seal-sm" aria-hidden>
+              <Icon name="members" />
+            </span>
+            Who may join
+          </h2>
+          <fieldset>
+            <legend className="sr-only">Recruitment</legend>
+            <div className="grid gap-1.5 sm:grid-cols-2" role="radiogroup" aria-label="Recruitment">
+              {RECRUITMENT_MODES.map((m) => {
+                const active = recruitment === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setRecruitment(m)}
+                    className={cx('flex items-start gap-3 rounded-[3px] border px-3 py-2 text-left transition-colors', active ? 'border-gold bg-gold/12' : 'border-gold/15 hover:border-gold/50')}
+                  >
+                    <span className={cx('mt-1 h-3.5 w-3.5 shrink-0 rounded-full border', active ? 'border-gold bg-gold' : 'border-gold/50')} aria-hidden />
+                    <span className="leading-snug">
+                      <span className="block font-display font-bold">{RECRUITMENT_DEFS[m].name}</span>
+                      <span className="block text-xs text-muted">{RECRUITMENT_DEFS[m].summary}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+          <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+            <FormField label="Description" hint="Optional. What the nation stands for; shown to players looking for a nation.">
+              <textarea className="field min-h-[76px]" value={description} maxLength={CLAN_RULES.descriptionMax} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Patient builders. We strike once, and well." />
+            </FormField>
+            <FormField label="Language" hint="Spoken in the nation channel.">
+              <select className="field" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                {CLAN_LANGUAGES.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+          <p className="mt-3 text-xs text-muted">You can change these later, and decide what each role in the nation may do.</p>
+        </section>
+
+        <section className="panel flex flex-1 flex-col p-4 sm:p-5">
           <h2 className="mb-1 flex items-center gap-2.5 font-display text-xl font-bold">
             <span className="seal seal-sm" aria-hidden>
-              <Glyph k="三" />
+              <Icon name="castle" />
             </span>
-            Your first province
+            The nation&apos;s capital
           </h2>
           <p className="mb-3 text-sm text-muted">
-            Provinces marked <span className="font-bold text-vermilion-bright">＋</span> are open. You begin with a castle, a farm, {WORLD.startingGarrison.ashigaru} ashigaru and {WORLD.startingGarrison.yari} yari, and{' '}
+            Provinces marked <span className="font-bold text-vermilion-bright">+</span> are open. The nation begins with a castle, a farm, {WORLD.startingGarrison.ashigaru} ashigaru and {WORLD.startingGarrison.yari} yari, and{' '}
             {WORLD.protectionHours} game hours of protection.
           </p>
           {map.error && !map.data ? (
@@ -330,6 +450,7 @@ export default function FoundPage() {
             </>
           )}
         </section>
+        </div>
       </div>
 
       {/* summary bar */}
@@ -338,9 +459,11 @@ export default function FoundPage() {
           <Portrait id={portrait} accent={color} size={48} className="hidden shrink-0 min-[400px]:block" />
           <Banner color={color} mon={mon} size={48} className="shrink-0" />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate font-display text-base font-bold">{clanName.trim() ? `${clanName.trim()} clan` : 'Unnamed clan'}</div>
+            <div className="truncate font-display text-base font-bold">
+              {clanName.trim() ? clanName.trim() : 'Unnamed nation'} {cleanTag ? <span className="num text-xs font-bold tracking-wider text-gold">[{cleanTag}]</span> : null}
+            </div>
             <div className="truncate text-xs text-muted">
-              {daimyoName.trim() || 'Unnamed Daimyo'} · {selected ? selected.name : 'no province chosen'}
+              {daimyoName.trim() || 'No name yet'} · {selected ? selected.name : 'no province chosen'}
             </div>
             {error ? (
               <div className="mt-0.5 text-xs font-bold text-vermilion-bright" role="alert">
@@ -349,7 +472,7 @@ export default function FoundPage() {
             ) : null}
           </div>
           <ActionButton variant="primary" busy={busy} reason={touched ? blocked : null} onClick={() => void submit()} wrapperClassName="max-w-[12rem] shrink-0">
-            {fallen ? 'Rise again' : 'Raise the banner'}
+            {fallen ? 'Found the new capital' : 'Raise the flag'}
           </ActionButton>
         </div>
       </div>

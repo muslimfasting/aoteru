@@ -38,7 +38,8 @@ export default function RegisterPage() {
     setError(null);
     try {
       await apiPost<AuthResponse>('/api/auth/register', { email: email.trim(), password, nickname: nickname.trim() });
-      router.replace('/found');
+      // New players start at the list of nations: join one, or found their own.
+      router.replace('/game');
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
@@ -48,7 +49,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Begin your rise"
-      subtitle="Create an account, then name your Daimyo and raise your banner."
+      subtitle="Create an account, then enter the service of a nation — or found your own."
       footer={
         <>
           Already rule a province?{' '}

@@ -1,5 +1,6 @@
 'use client';
 
+import { ClanGate } from '@/components/clan';
 import { GameShell } from '@/components/GameShell';
 import { Icon } from '@/components/icons';
 import { ErrorState, LoadingState } from '@/components/ui';
@@ -32,7 +33,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
         </Gate>
       )}
     >
-      <GameShell>{children}</GameShell>
+      <GameShell>
+        <ClanGate>{children}</ClanGate>
+      </GameShell>
     </GameProvider>
   );
 }

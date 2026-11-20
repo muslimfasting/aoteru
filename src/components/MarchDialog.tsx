@@ -217,7 +217,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
             </p>
             <p className="mt-2 text-sm">
               Once the column has left it cannot be recalled. If the attack fails, the survivors fall back to where they set out from.
-              {destProvince?.ownerClanId ? ' Attacking another clan ends any protection you still enjoy.' : ''}
+              {destProvince?.ownerClanId ? ' Attacking another nation ends any protection you still enjoy.' : ''}
             </p>
           </div>
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -246,7 +246,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
                 <option value="">Choose a province…</option>
                 {destOptions.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} — {p.relation === 'own' ? 'yours' : p.relation === 'enemy' ? 'at war' : p.relation === 'unclaimed' ? 'unclaimed' : 'another clan'}
+                    {p.name} — {p.relation === 'own' ? 'yours' : p.relation === 'enemy' ? 'at war' : p.relation === 'unclaimed' ? 'unclaimed' : 'another nation'}
                   </option>
                 ))}
               </select>

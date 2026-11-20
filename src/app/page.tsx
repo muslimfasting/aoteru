@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { MeResponse } from '@/game/api';
 import { BUILDINGS, BUILDING_TYPES, GAME_NAME, GAME_SUBTITLE, GAME_TAGLINE, UNITS, UNIT_TYPES } from '@/game/config';
 import { MAP_DECOR, MAP_SIZE, PROVINCES, REGIONS } from '@/game/map';
+import { ROLE_DEFS } from '@/game/clan';
 import { PILLARS, PILLAR_DEFS } from '@/game/pillars';
 import { Brand } from '@/components/Brand';
 import { apiGet } from '@/lib/api';
@@ -39,13 +40,13 @@ export default function LandingPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
 
-  // A signed-in player goes straight to the game (or to founding a clan).
+  // A signed-in player goes straight to the game.
   useEffect(() => {
     let cancelled = false;
     apiGet<MeResponse>('/api/player/me')
-      .then((me) => {
-        if (cancelled) return;
-        router.replace(me.clan && me.clan.status === 'active' ? '/game' : '/found');
+      .then(() => {
+        // The game itself sends a player without a nation to nation discovery.
+        if (!cancelled) router.replace('/game');
       })
       .catch(() => {
         if (!cancelled) setChecking(false);
@@ -73,25 +74,26 @@ export default function LandingPage() {
         {/* hero */}
         <section className="mx-auto grid w-full max-w-6xl items-center gap-8 px-4 pb-10 pt-6 lg:grid-cols-[1.05fr_1fr] lg:gap-12 lg:pb-16 lg:pt-12">
           <div className="relative">
-            <p className="heading-rule mb-4 max-w-xs">A chronicle of the warring provinces</p>
+            <p className="heading-rule mb-4 max-w-xs">A chronicle of the divided country</p>
             <h1 className="font-display text-[3.3rem] font-extrabold leading-[0.95] tracking-[0.06em] text-parchment sm:text-7xl">
               {GAME_NAME.toUpperCase()}
               <span className="mt-3 block text-xl font-bold tracking-[0.3em] text-gold sm:text-2xl">{GAME_SUBTITLE.toUpperCase()}</span>
             </h1>
             <p className="mt-6 font-display text-xl leading-relaxed text-parchment/90 sm:text-2xl">{GAME_TAGLINE}</p>
             <p className="mt-4 max-w-xl leading-relaxed text-muted">
-              The shogunate is a hollow name and every province answers to its own lord. Take up the seal of a Daimyo: build your castle town, feed your people, train your soldiers, read your rivals — and decide, one border at a
-              time, who will rule the realm. One shared world. It keeps turning while you sleep.
+              Japan fell, and has rebuilt itself to the age of steam and telegraph — but not as one country. Rival governments hold the provinces, each claiming to speak for the whole. Enter the service of a nation, or found one: rise from{' '}
+              {ROLE_DEFS.recruit.name} to {ROLE_DEFS.leader.name}, fill its treasury, train its armies, read its rivals — and decide together, one border at a time, who will reunify the country. The strongest nation does not always win;
+              the smartest does. One shared world. It keeps turning while you sleep.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link href="/register" className="btn btn-primary !min-h-[52px] !px-7 text-base">
-                Found your clan
+                Found or join a nation
               </Link>
               <Link href="/login" className="btn !min-h-[52px] !px-6 text-base">
-                Return to your castle
+                Return to your post
               </Link>
             </div>
-            {checking ? <p className="mt-3 text-xs text-faint">Looking for your banner…</p> : <p className="mt-3 text-xs text-faint">Free to play in your browser on desktop, tablet and phone. No pay-to-win.</p>}
+            {checking ? <p className="mt-3 text-xs text-faint">Checking your papers…</p> : <p className="mt-3 text-xs text-faint">Free to play in your browser on desktop, tablet and phone. No pay-to-win.</p>}
           </div>
 
           <div className="relative">
@@ -110,8 +112,8 @@ export default function LandingPage() {
         {/* five pillars */}
         <section className="border-y border-gold/15 bg-ink-950/50">
           <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:py-14">
-            <h2 className="text-center font-display text-3xl font-extrabold">The Five Pillars of a Daimyo</h2>
-            <p className="mx-auto mt-2 max-w-2xl text-center text-muted">Every deed strengthens one pillar. No lord can master them all at once — what you choose to become is what sets you apart.</p>
+            <h2 className="text-center font-display text-3xl font-extrabold">The Five Pillars</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-center text-muted">Every official grows their own. Nobody can master them all — so a government needs someone to command its armies, someone to keep its treasury and someone to run its spies, and what you choose to become is what your nation can count on.</p>
             <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {PILLARS.map((id) => {
                 const p = PILLAR_DEFS[id];
@@ -131,7 +133,10 @@ export default function LandingPage() {
 
         {/* what you do */}
         <section className="mx-auto w-full max-w-6xl px-4 py-10 lg:py-14">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Feature kanji="clan" title="Serve together">
+              Land, armies and the National Treasury belong to the nation. Officials pay in from their own purse, rise through the ranks, and sit in the cabinet that carries each pillar for everyone.
+            </Feature>
             <Feature kanji="城" title="Rule">
               Raise {BUILDING_TYPES.map((b) => BUILDINGS[b].name.toLowerCase()).join(', ')}. Balance gold, food, wood, stone, iron and the people themselves — a hungry province does not stay loyal.
             </Feature>
@@ -139,12 +144,12 @@ export default function LandingPage() {
               Muster {UNIT_TYPES.map((u) => UNITS[u].name.toLowerCase()).join(', ')}. Terrain, weather, walls and morale decide each battle, resolved on the server and written up round by round.
             </Feature>
             <Feature kanji="謀" title="Outwit">
-              Scout before you strike, declare war when the odds are yours, make peace when they are not. Every other banner on the map is another player — or a rival daimyo with plans of his own.
+              Scout before you strike, declare war when the odds are yours, make peace when they are not. Every other flag on the map is another nation of players — or a rival government with plans of its own.
             </Feature>
           </div>
 
           <div className="paper mt-8 p-5 sm:p-7">
-            <h2 className="font-display text-2xl font-extrabold">The road to Shogun</h2>
+            <h2 className="font-display text-2xl font-extrabold">The road to reunification</h2>
             <p className="mt-2 max-w-3xl leading-relaxed">
               Japan is divided into seven regions. This first world opens one of them; the rest of the map waits beyond its borders.
             </p>
@@ -165,7 +170,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-gold/15 px-4 py-6 text-center text-xs text-faint">
-        {GAME_NAME}: {GAME_SUBTITLE} — first playable prototype. An original work of historical fiction; clans and characters are invented or drawn from the public historical record.
+        {GAME_NAME}: {GAME_SUBTITLE} — first playable prototype. An original work of fiction set in an imagined Japan; its nations and characters are invented.
       </footer>
     </div>
   );
