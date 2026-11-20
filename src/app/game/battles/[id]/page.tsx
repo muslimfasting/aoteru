@@ -11,6 +11,7 @@ import { cx, fmt, fmtDateTime, fmtPct } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import { RESULT_STYLE, viewerResult } from '@/lib/world';
 
+import { Icon } from '@/components/icons';
 export default function BattleReportPage() {
   const { id } = useParams<{ id: string }>();
   const state = useApi<BattleDetailResponse>(id ? `/api/battles/${id}` : null, EVENTS.battles);
@@ -244,7 +245,7 @@ function SidePanel({ title, side, res, isYou, pursuit, won }: { title: string; s
                 <td>
                   <span className="flex items-center gap-2">
                     <span className="seal seal-sm seal-ink" aria-hidden>
-                      {UNITS[t].kanji}
+                      <Icon name={t} />
                     </span>
                     {UNITS[t].name}
                   </span>

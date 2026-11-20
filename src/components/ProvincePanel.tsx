@@ -19,6 +19,7 @@ import { useNow } from '@/lib/clock';
 import { MonBadge, NeutralBadge } from './Banner';
 import { ActionButton, Bar, ConfirmDialog, Countdown, ErrorState, LoadingState, TimedProgress, UnitsRow } from './ui';
 
+import { Icon } from '@/components/icons';
 export function relationChip(relation: string): { label: string; cls: string } {
   switch (relation) {
     case 'own':
@@ -123,7 +124,7 @@ export function ProvincePanel({
             {RESOURCE_KEYS.map((k) => (
               <li key={k} className="panel-flat flex flex-col items-center py-1.5" title={RESOURCE_INFO[k].name}>
                 <span className="font-display text-sm font-bold text-gold" aria-hidden>
-                  {RESOURCE_INFO[k].kanji}
+                  <Icon name={k} />
                 </span>
                 <span className="sr-only">{RESOURCE_INFO[k].name}</span>
                 <span className="num text-sm font-bold">{fmt(own ? own.production[k] : p.base[k])}</span>

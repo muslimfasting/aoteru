@@ -13,6 +13,7 @@ import { useGame } from '@/lib/game-context';
 import { useApi } from '@/lib/hooks';
 import { gameDateText } from '@/lib/world';
 
+import { Icon } from '@/components/icons';
 export default function OverviewPage() {
   const { clan, world, resources } = useGame();
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
@@ -97,7 +98,7 @@ export default function OverviewPage() {
                   <td>
                     <span className="flex items-center gap-2">
                       <span className="seal seal-sm seal-ink" aria-hidden>
-                        {RESOURCE_INFO[k].kanji}
+                        <Icon name={k} />
                       </span>
                       {RESOURCE_INFO[k].name}
                     </span>

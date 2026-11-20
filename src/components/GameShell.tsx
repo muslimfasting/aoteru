@@ -14,24 +14,25 @@ import { Banner } from './Banner';
 import { Brand } from './Brand';
 import { Countdown } from './ui';
 
+import { Icon, type IconName } from '@/components/icons';
 interface NavItem {
   href: string;
   label: string;
-  kanji: string;
+  icon: IconName;
   purpose: string;
 }
 
 export const NAV: NavItem[] = [
-  { href: '/game', label: 'Overview', kanji: '国', purpose: 'Kingdom dashboard' },
-  { href: '/game/map', label: 'Japan Map', kanji: '図', purpose: 'Territory' },
-  { href: '/game/castle', label: 'Castle', kanji: '城', purpose: 'Kingdom management' },
-  { href: '/game/military', label: 'Military', kanji: '軍', purpose: 'Army and warfare' },
-  { href: '/game/pillars', label: 'Five Pillars', kanji: '柱', purpose: 'Skill progression' },
-  { href: '/game/diplomacy', label: 'Diplomacy', kanji: '交', purpose: 'Relationships' },
-  { href: '/game/intel', label: 'Intelligence', kanji: '忍', purpose: 'Spy operations' },
-  { href: '/game/ranking', label: 'Ranking', kanji: '位', purpose: 'Leaderboards' },
-  { href: '/game/messages', label: 'Messages', kanji: '報', purpose: 'Communication' },
-  { href: '/game/settings', label: 'Settings', kanji: '設', purpose: 'Profile and world' },
+  { href: '/game', label: 'Overview', icon: 'overview', purpose: 'Kingdom dashboard' },
+  { href: '/game/map', label: 'Japan Map', icon: 'map', purpose: 'Territory' },
+  { href: '/game/castle', label: 'Castle', icon: 'castle', purpose: 'Kingdom management' },
+  { href: '/game/military', label: 'Military', icon: 'military', purpose: 'Army and warfare' },
+  { href: '/game/pillars', label: 'Five Pillars', icon: 'pillars', purpose: 'Skill progression' },
+  { href: '/game/diplomacy', label: 'Diplomacy', icon: 'diplomacy', purpose: 'Relationships' },
+  { href: '/game/intel', label: 'Intelligence', icon: 'intel', purpose: 'Spy operations' },
+  { href: '/game/ranking', label: 'Ranking', icon: 'ranking', purpose: 'Leaderboards' },
+  { href: '/game/messages', label: 'Messages', icon: 'messages', purpose: 'Communication' },
+  { href: '/game/settings', label: 'Settings', icon: 'settings', purpose: 'Profile and world' },
 ];
 
 const MOBILE_PRIMARY = ['/game', '/game/map', '/game/castle', '/game/military'];
@@ -76,7 +77,7 @@ function Sidebar() {
                   )}
                 >
                   <span className={cx('seal seal-sm', active ? '' : 'seal-ink')} aria-hidden>
-                    {item.kanji}
+                    <Icon name={item.icon} />
                   </span>
                   <span className="flex-1 font-display text-[0.98rem] font-bold tracking-wide">{item.label}</span>
                   {badge ? <span className="num rounded-sm bg-vermilion px-1.5 py-0.5 text-[0.65rem] font-bold text-parchment-light">{badge > 99 ? '99+' : badge}</span> : null}
@@ -157,10 +158,10 @@ function ResourceHeader() {
                 title={`${RESOURCE_INFO[k].name} — ${RESOURCE_INFO[k].purpose}`}
               >
                 <span className={cx('seal seal-sm', warn ? '' : 'seal-ink')} aria-hidden>
-                  {RESOURCE_INFO[k].kanji}
+                  <Icon name={k} />
                 </span>
                 <span className="leading-tight">
-                  <span className="sr-only">{RESOURCE_INFO[k].name}: </span>
+                  <span className="block text-[0.6rem] font-medium uppercase tracking-wider text-muted">{RESOURCE_INFO[k].name}</span>
                   <span className="num block text-[0.95rem] font-bold">{fmt(resources[k])}</span>
                   <span className={cx('num block text-[0.66rem]', net[k] < 0 ? 'text-vermilion-bright' : 'text-muted')}>{fmtSigned(net[k])}/h</span>
                 </span>
@@ -172,7 +173,7 @@ function ResourceHeader() {
         <div className="ml-auto flex items-center gap-2 lg:ml-0 lg:gap-3">
           <div className="flex items-center gap-1.5 rounded-[3px] border border-gold/15 bg-ink-800/60 px-2 py-1.5" title="Population of your provinces">
             <span className="font-display text-sm font-bold text-gold" aria-hidden>
-              民
+              <Icon name="people" />
             </span>
             <span className="sr-only">Population: </span>
             <span className="num text-[0.86rem] font-bold">{fmtCompact(clan.population)}</span>
@@ -182,7 +183,7 @@ function ResourceHeader() {
             title="Soldiers under arms / army capacity"
           >
             <span className="font-display text-sm font-bold text-gold" aria-hidden>
-              兵
+              <Icon name="army" />
             </span>
             <span className="sr-only">Army: </span>
             <span className="num text-[0.86rem] font-bold">
@@ -203,12 +204,14 @@ function ResourceHeader() {
             <li key={k} className={cx('flex flex-col items-center px-0.5 py-1.5 leading-tight', warn && 'bg-vermilion/20')}>
               <span className="flex items-center gap-1">
                 <span className={cx('font-display text-[0.82rem] font-bold', warn ? 'text-vermilion-bright' : 'text-gold')} aria-hidden>
-                  {RESOURCE_INFO[k].kanji}
+                  <Icon name={k} />
                 </span>
                 <span className="sr-only">{RESOURCE_INFO[k].name}: </span>
                 <span className="num text-[0.84rem] font-bold">{fmtCompact(resources[k])}</span>
               </span>
-              <span className={cx('num text-[0.62rem]', net[k] < 0 ? 'text-vermilion-bright' : 'text-muted')}>{fmtSigned(net[k])}/h</span>
+              <span className={cx('num text-[0.6rem]', net[k] < 0 ? 'text-vermilion-bright' : 'text-muted')}>
+                {RESOURCE_INFO[k].name} {fmtSigned(net[k])}
+              </span>
             </li>
           );
         })}
@@ -269,7 +272,7 @@ function BottomNav() {
                       className={cx('flex min-h-[56px] items-center gap-3 rounded-[3px] border px-3', active ? 'border-gold/50 bg-gold/10' : 'border-gold/15 bg-ink-800/70')}
                     >
                       <span className={cx('seal seal-sm', active ? '' : 'seal-ink')} aria-hidden>
-                        {item.kanji}
+                        <Icon name={item.icon} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-display text-[0.95rem] font-bold">{item.label}</span>
@@ -293,7 +296,7 @@ function BottomNav() {
               <li key={item.href}>
                 <Link href={item.href} aria-current={active ? 'page' : undefined} className={cx('flex min-h-[60px] flex-col items-center justify-center gap-1', active ? 'text-gold-bright' : 'text-muted')}>
                   <span className={cx('seal seal-sm', active ? '' : 'seal-ink')} aria-hidden>
-                    {item.kanji}
+                    <Icon name={item.icon} />
                   </span>
                   <span className="text-[0.66rem] font-medium tracking-wide">{item.label === 'Japan Map' ? 'Map' : item.label}</span>
                 </Link>
@@ -308,7 +311,7 @@ function BottomNav() {
               className={cx('relative flex min-h-[60px] w-full flex-col items-center justify-center gap-1', moreOpen || restActive ? 'text-gold-bright' : 'text-muted')}
             >
               <span className={cx('seal seal-sm', moreOpen || restActive ? '' : 'seal-ink')} aria-hidden>
-                他
+                <Icon name="more" />
               </span>
               <span className="text-[0.66rem] font-medium tracking-wide">More</span>
               {unread > 0 ? <span className="absolute right-[22%] top-1.5 h-2.5 w-2.5 rounded-full border border-ink-950 bg-vermilion-bright" aria-label={`${unread} unread`} /> : null}

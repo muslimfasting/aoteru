@@ -15,6 +15,7 @@ import { useGame } from '@/lib/game-context';
 import { useAction, useApi, useIsDesktop, type ApiState } from '@/lib/hooks';
 import { RESULT_STYLE, viewerResult } from '@/lib/world';
 
+import { Icon } from '@/components/icons';
 type Tab = 'recruit' | 'armies' | 'battles';
 
 export default function MilitaryPage() {
@@ -71,7 +72,7 @@ function MilitaryScreen() {
         </div>
         <Stat label="Power" value={fmt(a.power)} hint="combined strength" />
         <Stat label="Mustering" value={fmt(a.recruiting)} hint="in training" />
-        <Stat label="Upkeep / hour" value={`${fmt(a.upkeep.food)} ${RESOURCE_INFO.food.kanji}`} hint={`and ${fmt(a.upkeep.gold)} gold`} />
+        <Stat label="Upkeep / hour" value={`${fmt(a.upkeep.food)} food`} hint={`and ${fmt(a.upkeep.gold)} gold`} />
       </div>
 
       <div className="mb-4 sm:hidden">
@@ -276,7 +277,7 @@ function RecruitPanel({ garrisons, initialProvinceId }: { garrisons: ArmyOvervie
                       >
                         <span className="flex items-center gap-2.5">
                           <span className={cx('seal', !active && 'seal-ink')} aria-hidden>
-                            {def.kanji}
+                            <Icon name={def.type} />
                           </span>
                           <span className="min-w-0 flex-1 leading-tight">
                             <span className="block font-display text-base font-bold">{def.name}</span>

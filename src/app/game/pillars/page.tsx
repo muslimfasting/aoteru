@@ -9,6 +9,7 @@ import { EVENTS } from '@/lib/events';
 import { cx, fmt } from '@/lib/format';
 import { useAction, useApi } from '@/lib/hooks';
 
+import { Icon } from '@/components/icons';
 const MOD_LABELS: Record<ModifierKey, { label: string; kind: 'pct' | 'flat'; sign?: -1 }> = {
   attack: { label: 'Army attack', kind: 'pct' },
   toughness: { label: 'Army toughness', kind: 'pct' },
@@ -107,7 +108,7 @@ export default function PillarsPage() {
               )}
             >
               <span className={cx('seal sm:!h-12 sm:!w-12 sm:!text-[1.6rem]', !active && 'seal-ink')} aria-hidden>
-                {d.kanji}
+                <Icon name={d.id} />
               </span>
               <span className="hidden font-display text-sm font-bold leading-tight sm:block lg:text-base">{d.name}</span>
               <span className="font-display text-[0.62rem] font-bold leading-tight sm:hidden">{d.name.split(' ')[0]}</span>

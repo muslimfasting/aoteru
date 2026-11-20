@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import type { BuildingDTO, ProvinceDetailResponse, ProvinceSummaryDTO, WorldMapResponse } from '@/game/api';
-import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, armyPower, totalUnits } from '@/game/config';
+import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, armyPower, bannerHex, emptyBuildingLevels, totalUnits } from '@/game/config';
+import { CityView } from '@/components/CityView';
 import { ActionButton, Bar, CostRow, Countdown, DurationText, EmptyState, ErrorState, LoadingState, PageHeader, Panel, TimedProgress, UnitsRow } from '@/components/ui';
 import { apiPost } from '@/lib/api';
 import { useNow } from '@/lib/clock';
@@ -13,6 +14,7 @@ import { cx, fmt, missingResources } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useAction, useApi } from '@/lib/hooks';
 
+import { Icon } from '@/components/icons';
 export default function CastlePage() {
   return (
     <Suspense fallback={<LoadingState />}>
@@ -88,7 +90,7 @@ function ProvinceSwitcher({ provinces, selectedId, onSelect }: { provinces: Prov
 
 function ProvinceManagement({ provinceId }: { provinceId: string }) {
   const state = useApi<ProvinceDetailResponse>(`/api/provinces/${provinceId}`, EVENTS.province);
-  const { resources } = useGame();
+  const { resources, clan, world } = useGame();
   const build = useAction();
   const festival = useAction();
   const now = useNow();
@@ -128,7 +130,21 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
         ? 'Loyalty is already at its height'
         : null;
 
+  const levels = emptyBuildingLevels();
+  for (const b of own.buildings) levels[b.type] = b.level;
+  const underConstruction = own.buildings.find((b) => b.upgrading)?.type ?? null;
+
   return (
+    <div className="space-y-4 lg:space-y-5">
+    <CityView
+      name={province.name}
+      kanji={province.kanji}
+      terrain={province.terrain}
+      levels={levels}
+      upgrading={underConstruction}
+      bannerHex={bannerHex(clan.banner.color)}
+      hour={world.hour}
+    />
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-5">
       {/* buildings */}
       <Panel title={`Buildings of ${province.name}`} kanji="築" bodyClassName="p-3 sm:p-4">
@@ -145,7 +161,7 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
               <li key={b.type} className="panel-flat flex flex-col p-3.5">
                 <div className="flex items-start gap-3">
                   <span className={cx('seal seal-lg', b.level === 0 && 'seal-ink')} aria-hidden>
-                    {def.kanji}
+                    <Icon name={def.type} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
@@ -236,7 +252,7 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
                   <td>
                     <span className="flex items-center gap-2">
                       <span className="font-display font-bold text-gold" aria-hidden>
-                        {RESOURCE_INFO[k].kanji}
+                        <Icon name={k} />
                       </span>
                       {RESOURCE_INFO[k].name}
                     </span>
@@ -293,6 +309,7 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
           ) : null}
         </Panel>
       </div>
+    </div>
     </div>
   );
 }

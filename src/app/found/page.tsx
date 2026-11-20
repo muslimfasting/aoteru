@@ -22,6 +22,7 @@ import { cx, fmt } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import { useToast } from '@/components/toast';
 
+import { Icon } from '@/components/icons';
 function nameError(value: string, rule: { min: number; max: number; pattern: RegExp }, what: string): string | null {
   const v = value.trim();
   if (v.length < rule.min || v.length > rule.max) return `${what} must be ${rule.min}–${rule.max} characters.`;
@@ -312,7 +313,7 @@ export default function FoundPage() {
                     {RESOURCE_KEYS.map((k) => (
                       <span key={k} title={`${RESOURCE_INFO[k].name} per hour`}>
                         <span className="font-display font-bold text-vermilion-deep" aria-hidden>
-                          {RESOURCE_INFO[k].kanji}
+                          <Icon name={k} />
                         </span>{' '}
                         <span className="sr-only">{RESOURCE_INFO[k].name}</span>
                         {def.base[k]}/h

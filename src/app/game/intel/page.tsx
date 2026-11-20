@@ -13,6 +13,7 @@ import { cx, fmt, fmtDuration, fmtPct, timeAgo } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
 import { useAction, useApi } from '@/lib/hooks';
 
+import { Icon } from '@/components/icons';
 export default function IntelPage() {
   const ops = useApi<EspionageResponse>('/api/espionage', EVENTS.intel);
   const map = useApi<WorldMapResponse>('/api/world/map', EVENTS.map);
@@ -224,7 +225,7 @@ function ReportCard({ op, report, onExpire }: { op: EspionageOpDTO; report: Inte
           {RESOURCE_KEYS.map((k) => (
             <span key={k} title={RESOURCE_INFO[k].name}>
               <span className="font-display font-bold text-vermilion-deep" aria-hidden>
-                {RESOURCE_INFO[k].kanji}
+                <Icon name={k} />
               </span>{' '}
               <span className="sr-only">{RESOURCE_INFO[k].name}</span>
               {fmt(report.ownerResources![k])}

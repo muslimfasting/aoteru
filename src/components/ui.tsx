@@ -5,6 +5,7 @@ import { RESOURCE_INFO, RESOURCE_KEYS, UNITS, UNIT_TYPES, type ResourceBag, type
 import { useNow } from '@/lib/clock';
 import { cx, fmt, fmtClock, fmtDuration } from '@/lib/format';
 
+import { Icon } from '@/components/icons';
 // ---------------------------------------------------------------------------
 // Layout primitives
 // ---------------------------------------------------------------------------
@@ -445,7 +446,7 @@ export function CostRow({ cost, have, className }: { cost: Partial<ResourceBag>;
             title={`${RESOURCE_INFO[k].name}${lacking ? ' — not enough' : ''}`}
           >
             <span className="font-display text-[0.8rem] font-bold text-gold [.paper_&]:text-vermilion-deep" aria-hidden>
-              {RESOURCE_INFO[k].kanji}
+              <Icon name={k} />
             </span>
             <span className="sr-only">{RESOURCE_INFO[k].name}</span>
             {fmt(cost[k]!)}
@@ -465,7 +466,7 @@ export function UnitsRow({ units, className, showZero }: { units: Partial<UnitCo
       {types.map((t) => (
         <span key={t} className="num inline-flex items-center gap-1.5 text-sm" title={UNITS[t].name}>
           <span className="seal seal-sm seal-ink !h-5 !w-5 !text-[0.7rem]" aria-hidden>
-            {UNITS[t].kanji}
+            <Icon name={t} />
           </span>
           <span className="sr-only">{UNITS[t].name}</span>
           {fmt(units[t] ?? 0)}

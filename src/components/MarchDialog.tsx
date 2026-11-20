@@ -18,6 +18,7 @@ import { useAction, useApi, useDebounced } from '@/lib/hooks';
 import { useGame } from '@/lib/game-context';
 import { ActionButton, Dialog, ErrorState, LoadingState, NumberStepper, Spinner } from './ui';
 
+import { Icon } from '@/components/icons';
 export interface MarchDialogProps {
   open: boolean;
   onClose: () => void;
@@ -267,7 +268,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
                 <li key={t} className="panel-flat p-2.5">
                   <div className="mb-1.5 flex items-center gap-2">
                     <span className="seal seal-sm seal-ink" aria-hidden>
-                      {UNITS[t].kanji}
+                      <Icon name={t} />
                     </span>
                     <span className="flex-1 font-display font-bold">{UNITS[t].name}</span>
                     <span className="num text-xs text-muted">
