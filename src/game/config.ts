@@ -587,6 +587,6 @@ export function bannerHex(colorId: string): string {
 export const NAME_RULES = {
   nickname: { min: 3, max: 20, pattern: /^[A-Za-z0-9_\-]+$/ },
   clanName: { min: 3, max: 24, pattern: /^[A-Za-z0-9' \-]+$/ },
-  daimyoName: { min: 2, max: 28, pattern: /^[A-Za-z0-9' \-]+$/ },
+  daimyoName: { min: 2, max: 28, pattern: /^[A-Za-z0-9_' \-]+$/ },
   passwordMin: 8,
 } as const;

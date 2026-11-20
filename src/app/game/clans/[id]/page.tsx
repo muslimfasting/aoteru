@@ -4,12 +4,13 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { ClanProfileResponse } from '@/game/api';
-import { CLAN_LANGUAGES, RECRUITMENT_DEFS, ROLE_DEFS } from '@/game/clan';
+import { CLAN_LANGUAGES, DOCTRINE_DEFS, RECRUITMENT_DEFS, ROLE_DEFS } from '@/game/clan';
 import { PILLAR_DEFS } from '@/game/pillars';
 import { Banner } from '@/components/Banner';
 import { ClanTag, JoinAction, PlayerLink, RecruitmentChip, RoleBadge } from '@/components/clan';
 import { Icon } from '@/components/icons';
 import { Portrait } from '@/components/Portrait';
+import { DOCTRINE_ICON, DoctrineEffects } from '@/components/DoctrinePanel';
 import { ErrorState, LoadingState, Panel, Stat } from '@/components/ui';
 import { EVENTS } from '@/lib/events';
 import { cx, fmt } from '@/lib/format';
@@ -61,13 +62,30 @@ function Profile({ data, onChanged }: { data: ClanProfileResponse; onChanged: ()
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{clan.description || (clan.isNpc ? 'A rival government that answers to no player.' : 'This nation has not described itself yet.')}</p>
             </div>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gold/15 pt-3 sm:grid-cols-4">
+          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gold/15 pt-3 sm:grid-cols-5">
             <Stat label="Rank" value={data.rank ? `#${data.rank}` : '—'} hint={`${fmt(clan.score)} renown`} />
+            <Stat label="War record" value={`${clan.victories} – ${clan.defeats}`} hint="battles won – lost" />
             <Stat label="Provinces" value={clan.provinceCount} hint={data.regionName ?? undefined} />
             <Stat label="Officials" value={clan.isNpc ? '—' : clan.memberCount} />
             <Stat label="Recruitment" value={clan.isNpc ? 'Closed' : RECRUITMENT_DEFS[clan.recruitment].name} />
           </dl>
         </section>
+
+        {clan.doctrine ? (
+          <Panel title="Doctrine" icon="doctrine">
+            <div className="flex items-start gap-3">
+              <span className="seal seal-sm seal-ink shrink-0" aria-hidden>
+                <Icon name={DOCTRINE_ICON[clan.doctrine]} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-base font-bold leading-tight">{DOCTRINE_DEFS[clan.doctrine].name}</p>
+                <p className="text-sm italic text-muted">{DOCTRINE_DEFS[clan.doctrine].motto}</p>
+                <p className="mt-1 text-sm text-parchment/85">{DOCTRINE_DEFS[clan.doctrine].summary}</p>
+                <DoctrineEffects doctrine={clan.doctrine} className="mt-2" />
+              </div>
+            </div>
+          </Panel>
+        ) : null}
 
         <Panel title={clan.isNpc ? 'Officials' : `Officials · ${data.members.length}`} icon="members" bodyClassName="p-0">
           {data.members.length === 0 ? (

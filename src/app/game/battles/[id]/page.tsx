@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import type { BattleDetailResponse } from '@/game/api';
 import { OUTCOME_LABEL, WEATHER_INFO, type BattleResult, type BattleRound, type BattleSide } from '@/game/battle';
 import { TERRAIN_INFO, UNITS, UNIT_TYPES, totalUnits, type UnitCounts } from '@/game/config';
+import { StrategyReport } from '@/components/StrategyReport';
+import { tacticName } from '@/components/strategy';
 import { Countdown, ErrorState, LoadingState, Panel } from '@/components/ui';
 import { EVENTS } from '@/lib/events';
 import { cx, fmt, fmtDateTime, fmtPct } from '@/lib/format';
@@ -66,7 +68,8 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
                 <Countdown to={b.resolvesAt} done="any moment" onDone={onRefresh} />
               </p>
               <p className="mx-auto mt-4 max-w-md text-sm">
-                {youAttack ? 'Your army is fighting at the walls.' : 'Your garrison is holding the walls.'} Reinforcements that arrive before the battle ends still count.
+                {youAttack ? `Your army is fighting at the walls, attempting ${tacticName(b.tactic).toLowerCase() === 'frontal assault' ? 'a frontal assault' : tacticName(b.tactic)}.` : 'Your garrison is holding the walls. The enemy\'s tactic will be known when the battle is over.'}{' '}
+                Reinforcements that arrive before the battle ends still count.
               </p>
             </>
           )}
@@ -101,6 +104,7 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
             <span className="chip !whitespace-normal text-center">Official result: {OUTCOME_LABEL[result.outcome]} for the attacker</span>
             {b.provinceCaptured ? <span className="chip chip-red">{youAttack ? `${b.provinceName} is yours` : `${b.provinceName} has fallen`}</span> : null}
             <span className="chip">{result.rounds.length} {result.rounds.length === 1 ? 'round' : 'rounds'}</span>
+            <span className="chip">Tactic: {inputs.strategy?.tacticName ?? tacticName(b.tactic)}</span>
           </div>
         </div>
       </section>
@@ -110,6 +114,8 @@ function Report({ data, onRefresh }: { data: BattleDetailResponse; onRefresh: ()
         <SidePanel title="Attacker" side={inputs.attacker} res={result.attacker} isYou={youAttack} pursuit={result.pursuit.side === 'attacker' ? result.pursuit.losses : null} won={result.winner === 'attacker'} />
         <SidePanel title="Defender" side={inputs.defender} res={result.defender} isYou={!youAttack} pursuit={result.pursuit.side === 'defender' ? result.pursuit.losses : null} won={result.winner === 'defender'} />
       </div>
+
+      <StrategyReport inputs={inputs} youAttack={youAttack} />
 
       {/* conditions */}
       <Panel title="The field" kanji="地">

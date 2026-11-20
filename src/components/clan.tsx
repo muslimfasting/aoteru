@@ -337,10 +337,11 @@ export function FallenClanState() {
   );
 }
 
-const CLAN_ONLY = ['/game/castle', '/game/military', '/game/battles', '/game/diplomacy', '/game/intel'];
+const CLAN_ONLY = ['/game/castle', '/game/military', '/game/war', '/game/battles', '/game/diplomacy', '/game/intel'];
 const WHAT: Record<string, string> = {
   '/game/castle': 'Castles are built by nations.',
   '/game/military': 'Armies are raised by nations.',
+  '/game/war': 'War plans are made by the officials of a nation.',
   '/game/battles': 'Battle reports belong to the nations that fought.',
   '/game/diplomacy': 'War and peace are made between nations.',
   '/game/intel': 'Scouts are sent by nations.',

@@ -7,7 +7,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { ClanDirectoryEntryDTO, ClanDirectoryResponse } from '@/game/api';
-import { CLAN_LANGUAGES, RECRUITMENT_DEFS, RECRUITMENT_MODES } from '@/game/clan';
+import { CLAN_LANGUAGES, RECRUITMENT_DEFS, RECRUITMENT_MODES, DOCTRINE_DEFS } from '@/game/clan';
 import { Banner } from '@/components/Banner';
 import { ClanLink, ClanTag, JoinAction, RecruitmentChip } from '@/components/clan';
 import { Icon } from '@/components/icons';
@@ -217,6 +217,16 @@ function ClanRow({ entry, max, onDirectory }: { entry: ClanDirectoryEntryDTO; ma
             {entry.regionName ? ` · ${entry.regionName}` : ''}
           </span>
           {!clan.isNpc ? <span>{CLAN_LANGUAGES.find((l) => l.id === clan.language)?.name ?? clan.language}</span> : null}
+          <span className="inline-flex items-center gap-1" title="Battles won and lost">
+            <Icon name="military" />
+            {clan.victories} won · {clan.defeats} lost
+          </span>
+          {clan.doctrine ? (
+            <span className="inline-flex items-center gap-1 text-gold" title={DOCTRINE_DEFS[clan.doctrine].summary}>
+              <Icon name="doctrine" />
+              {DOCTRINE_DEFS[clan.doctrine].name}
+            </span>
+          ) : null}
         </div>
         {clan.description ? <p className="mt-1.5 line-clamp-2 break-words text-sm text-muted">{clan.description}</p> : null}
       </div>

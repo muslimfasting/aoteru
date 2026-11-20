@@ -57,4 +57,6 @@ export const EVENTS = {
   /** The list of nations and the viewer's invitations and applications. */
   directory: ['clan:directory', 'clan:updated', 'world:province_updated'],
   ranking: ['world:province_updated', 'world:tick'],
+  /** The War Council: plans, duties, and what changes whether a plan can go. */
+  war: ['war:updated', 'army:updated', 'battle:completed', 'espionage:completed', 'world:province_updated', 'diplomacy:updated', 'clan:updated', 'recruitment:completed'],
 } as const satisfies Record<string, readonly BusEvent[]>;

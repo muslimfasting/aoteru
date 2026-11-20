@@ -360,6 +360,69 @@ const PATHS = {
       <path d="M11.5 12H20M17 12v3.5M20 12v2.5" />
     </>
   ),
+  /** A map table with a planted flag: the War Council. */
+  war: (
+    <>
+      <path d="M3.5 19.5l2.5-8h12l2.5 8z" />
+      <path d="M12 15.5V4" />
+      <path d="M12 4.5h6l-1.8 2.3L18 9h-6" />
+      <path d="M8 15.5l1.5 1.5M9.5 15.5L8 17" />
+    </>
+  ),
+  /** An arrow sweeping round a block: a tactic. */
+  tactic: (
+    <>
+      <rect x="9.5" y="9" width="5" height="6" rx="0.5" />
+      <path d="M4 18c0-9 4-13 13-13" />
+      <path d="M13.5 3.5L17 5l-1.8 3.2" />
+    </>
+  ),
+  /** A sealed document: a treaty. */
+  treaty: (
+    <>
+      <path d="M6 3.5h9l3 3V20.5H6z" />
+      <path d="M9 8h6M9 11.5h6" />
+      <circle cx="12" cy="16" r="1.8" />
+    </>
+  ),
+  /** An open book: a doctrine. */
+  doctrine: (
+    <>
+      <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z" />
+      <path d="M12 6.5v13" />
+    </>
+  ),
+  /** A crosshair: the target of a plan. */
+  target: (
+    <>
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 2.5V6M12 18v3.5M2.5 12H6M18 12h3.5" />
+    </>
+  ),
+  /** A clock face: time and waiting. */
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  /** Two clasped hands, drawn as linked rings: an alliance. */
+  alliance: (
+    <>
+      <circle cx="9" cy="12" r="4.5" />
+      <circle cx="15" cy="12" r="4.5" />
+    </>
+  ),
+  /** A crescent moon: night operations. */
+  moon: <path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z" />,
+  /** A lock: something that cannot be used yet. */
+  lock: (
+    <>
+      <rect x="5.5" y="10.5" width="13" height="9" rx="1" />
+      <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { ClanPublicDTO, DiplomacyClanDTO, DiplomacyResponse, WarDTO } from '@/game/api';
+import { PACT_BREAK_COOLDOWN_HOURS, PACT_BREAK_LOYALTY, PACT_DEFS, PACT_TYPES, type PactType } from '@/game/clan';
+import { Icon } from '@/components/icons';
 import { Banner } from '@/components/Banner';
 import { Portrait } from '@/components/Portrait';
 import { ActionButton, ConfirmDialog, Countdown, EmptyState, ErrorState, LoadingState, PageHeader, Panel } from '@/components/ui';
@@ -20,6 +22,7 @@ export default function DiplomacyPage() {
   const action = useAction();
   const now = useNow();
   const [warTarget, setWarTarget] = useState<DiplomacyClanDTO | null>(null);
+  const [breakTarget, setBreakTarget] = useState<DiplomacyClanDTO | null>(null);
 
   if (state.error && !state.data) return <ErrorState message={state.error.message} onRetry={() => void state.refresh()} />;
   if (!state.data) return <LoadingState label="Receiving the envoys…" />;
@@ -41,8 +44,16 @@ export default function DiplomacyPage() {
     if (res) setWarTarget(null);
   };
 
+  const breakTreaty = async () => {
+    if (!breakTarget?.pact) return;
+    const name = PACT_DEFS[breakTarget.pact.type].name.toLowerCase();
+    const res = await mutate(() => apiPost<DiplomacyResponse>('/api/diplomacy/break', { pactId: breakTarget.pact!.id }), `The ${name} with ${breakTarget.clan.name} is ended.`);
+    if (res) setBreakTarget(null);
+  };
+
   const atWar = data.clans.filter((c) => c.relation === 'war');
-  const others = data.clans.filter((c) => c.relation !== 'war');
+  const treaties = data.clans.filter((c) => c.relation === 'nap' || c.relation === 'alliance');
+  const others = data.clans.filter((c) => c.relation === 'neutral');
   const clanName = (id: string) => (id === clan.id ? `${clan.name} (you)` : (data.clans.find((c) => c.clan.id === id)?.clan.name ?? 'a fallen nation'));
   const myProtection = clan.protectedUntil && Date.parse(clan.protectedUntil) > now ? clan.protectedUntil : null;
 
@@ -64,6 +75,19 @@ export default function DiplomacyPage() {
             )
           : undefined
       }
+      onProposePact={(type) =>
+        void mutate(
+          () => apiPost<DiplomacyResponse>('/api/diplomacy/propose', { clanId: c.clan.id, type }),
+          `An envoy carries your offer of ${type === 'alliance' ? 'an alliance' : 'a non-aggression pact'} to ${c.clan.name}.`,
+        )
+      }
+      onRespondPact={(proposalId, type, accept) =>
+        void mutate(
+          () => apiPost<DiplomacyResponse>('/api/diplomacy/respond', { proposalId, accept }),
+          accept ? `The ${PACT_DEFS[type].name.toLowerCase()} with ${c.clan.name} is signed.` : `The envoy of ${c.clan.name} is sent away.`,
+        )
+      }
+      onBreak={() => setBreakTarget(c)}
     />
   );
 
@@ -81,8 +105,17 @@ export default function DiplomacyPage() {
                 <ul className="divide-y divide-gold/10">{atWar.map(row)}</ul>
               </Panel>
             ) : null}
-            <Panel title={atWar.length > 0 ? 'Other nations' : 'Nations of the realm'} kanji="家" bodyClassName="p-0">
-              {others.length === 0 ? <p className="p-4 text-sm text-muted">You are at war with every nation in the realm.</p> : <ul className="divide-y divide-gold/10">{others.map(row)}</ul>}
+            {treaties.length > 0 ? (
+              <Panel title="Bound by treaty" icon="treaty" bodyClassName="p-0">
+                <ul className="divide-y divide-gold/10">{treaties.map(row)}</ul>
+              </Panel>
+            ) : null}
+            <Panel title={atWar.length > 0 || treaties.length > 0 ? 'Other nations' : 'Nations of the realm'} kanji="家" bodyClassName="p-0">
+              {others.length === 0 ? (
+                <p className="p-4 text-sm text-muted">Every nation in the realm is either at war with you or bound to you by treaty.</p>
+              ) : (
+                <ul className="divide-y divide-gold/10">{others.map(row)}</ul>
+              )}
             </Panel>
           </div>
 
@@ -101,6 +134,23 @@ export default function DiplomacyPage() {
                   Your own truce lasts another <Countdown to={myProtection} className="font-bold text-gold-bright" done="a moment" />. Declaring war ends it at once.
                 </p>
               ) : null}
+            </Panel>
+
+            <Panel title="Treaties" icon="treaty">
+              <ul className="space-y-3 text-sm leading-relaxed text-parchment/85">
+                {PACT_TYPES.map((type) => (
+                  <li key={type} className="flex items-start gap-2.5">
+                    <Icon name={type === 'alliance' ? 'alliance' : 'treaty'} className="mt-1 shrink-0 text-gold" />
+                    <span>
+                      <strong className="text-parchment">{PACT_DEFS[type].name}.</strong> {PACT_DEFS[type].summary}{' '}
+                      <span className="text-muted">{PACT_DEFS[type].hours ? `Lasts ${Math.round(PACT_DEFS[type].hours! / 24)} days.` : 'Lasts until one side ends it.'}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 rounded-[3px] border border-vermilion/40 bg-vermilion/10 px-3 py-2 text-sm">
+                Ending a treaty early costs <strong>{PACT_BREAK_LOYALTY} loyalty in every province you hold</strong>, and you may not declare war on the former partner for {PACT_BREAK_COOLDOWN_HOURS} game hours.
+              </p>
             </Panel>
 
             <Panel title="History of your wars" kanji="史">
@@ -144,6 +194,33 @@ export default function DiplomacyPage() {
           </>
         ) : null}
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={breakTarget !== null}
+        onClose={() => setBreakTarget(null)}
+        onConfirm={breakTreaty}
+        busy={action.busy}
+        danger
+        icon="treaty"
+        title={breakTarget?.pact ? `End the ${PACT_DEFS[breakTarget.pact.type].name.toLowerCase()} with ${breakTarget.clan.name}?` : 'End the treaty'}
+        confirmLabel="Break the treaty"
+      >
+        {breakTarget?.pact ? (
+          <>
+            <p>
+              Your nation gave its word to <strong>{breakTarget.clan.name}</strong>. Breaking it is remembered, at home first of all.
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-muted">
+              <li>
+                Every province you hold loses <span className="font-bold text-vermilion-bright">{PACT_BREAK_LOYALTY} loyalty</span> at once.
+              </li>
+              <li>You may not declare war on {breakTarget.clan.name} for {PACT_BREAK_COOLDOWN_HOURS} game hours.</li>
+              <li>The whole realm reads of it in the chronicle.</li>
+              {breakTarget.pact.type === 'alliance' ? <li>You lose sight of their garrisons and the right to march through their land.</li> : null}
+            </ul>
+          </>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }
@@ -175,6 +252,9 @@ function ClanRow({
   onDeclare,
   onPropose,
   onRespond,
+  onProposePact,
+  onRespondPact,
+  onBreak,
 }: {
   entry: DiplomacyClanDTO;
   busy: boolean;
@@ -185,45 +265,121 @@ function ClanRow({
   onDeclare: () => void;
   onPropose: () => void;
   onRespond: (accept: boolean) => void;
+  onProposePact: (type: PactType) => void;
+  onRespondPact: (proposalId: string, type: PactType, accept: boolean) => void;
+  onBreak: () => void;
 }) {
-  const { clan, relation, pendingPeace } = entry;
+  const { clan, relation, pendingPeace, pact } = entry;
   const protectedUntil = clan.protectedUntil && Date.parse(clan.protectedUntil) > now ? clan.protectedUntil : null;
+  const incoming = entry.pendingPacts.filter((p) => p.direction === 'incoming');
+  const outgoing = entry.pendingPacts.filter((p) => p.direction === 'outgoing');
+  const offering = (type: PactType) => outgoing.some((p) => p.type === type);
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5">
-      <ClanIdentity clan={clan} />
-      <div className="flex flex-wrap items-center gap-1.5">
-        {clan.status === 'fallen' ? <span className="chip chip-muted">Fallen</span> : relation === 'war' ? <span className="chip chip-red">At war</span> : <span className="chip chip-muted">Neutral</span>}
-        {protectedUntil ? (
-          <span className="chip">
-            Truce <Countdown to={protectedUntil} done="ending" />
-          </span>
-        ) : null}
-      </div>
-      <div className="flex w-full flex-wrap items-start justify-end gap-2 sm:w-auto">
-        {relation === 'war' ? (
-          pendingPeace === 'incoming' ? (
-            <>
-              <span className="w-full text-right text-sm text-gold-bright sm:w-auto sm:self-center">They offer peace.</span>
-              <ActionButton variant="gold" size="sm" busy={busy} reason={blocked} onClick={() => onRespond(true)}>
-                Accept peace
-              </ActionButton>
-              <button type="button" className="btn btn-sm" disabled={busy || !!blocked} onClick={() => onRespond(false)}>
-                Refuse
-              </button>
-            </>
-          ) : pendingPeace === 'outgoing' ? (
-            <span className="self-center text-sm text-muted">Your envoy awaits their answer…</span>
+    <li className="px-4 py-3.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <ClanIdentity clan={clan} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {clan.status === 'fallen' ? (
+            <span className="chip chip-muted">Fallen</span>
+          ) : relation === 'war' ? (
+            <span className="chip chip-red">At war</span>
+          ) : relation === 'alliance' ? (
+            <span className="chip chip-jade">
+              <Icon name="alliance" size="0.95em" /> Allied
+            </span>
+          ) : relation === 'nap' ? (
+            <span className="chip chip-jade">
+              <Icon name="treaty" size="0.95em" /> Non-aggression pact
+            </span>
           ) : (
-            <ActionButton size="sm" busy={busy} reason={blocked} onClick={onPropose}>
-              Offer peace
-            </ActionButton>
-          )
-        ) : clan.status === 'fallen' ? null : (
-          <ActionButton variant="primary" size="sm" reason={blocked ?? (entry.canDeclareWar ? null : (entry.declareBlockedReason ?? 'War cannot be declared now'))} busy={busy} onClick={onDeclare} wrapperClassName="max-w-[14rem]">
-            Declare war · {fmt(warCost)}
-          </ActionButton>
-        )}
+            <span className="chip chip-muted">Neutral</span>
+          )}
+          {pact?.endsAt ? (
+            <span className="chip">
+              ends in <Countdown to={pact.endsAt} done="a moment" />
+            </span>
+          ) : pact ? (
+            <span className="chip">until ended</span>
+          ) : null}
+          {protectedUntil ? (
+            <span className="chip">
+              Truce <Countdown to={protectedUntil} done="ending" />
+            </span>
+          ) : null}
+        </div>
       </div>
+
+      {incoming.map((p) => (
+        <div key={p.proposalId} className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[3px] border border-gold/40 bg-gold/10 px-3 py-2">
+          <span className="min-w-0 flex-1 text-sm">
+            <strong className="text-gold-bright">They offer {p.type === 'alliance' ? 'an alliance' : 'a non-aggression pact'}.</strong>{' '}
+            <span className="text-parchment/85">{PACT_DEFS[p.type].summary}</span>
+          </span>
+          <ActionButton variant="gold" size="sm" busy={busy} reason={blocked} onClick={() => onRespondPact(p.proposalId, p.type, true)}>
+            Sign
+          </ActionButton>
+          <button type="button" className="btn btn-sm" disabled={busy || !!blocked} onClick={() => onRespondPact(p.proposalId, p.type, false)}>
+            Refuse
+          </button>
+        </div>
+      ))}
+      {outgoing.map((p) => (
+        <p key={p.proposalId} className="mt-2 text-sm text-muted">
+          Your envoy awaits their answer on {p.type === 'alliance' ? 'an alliance' : 'a non-aggression pact'}…
+        </p>
+      ))}
+
+      {clan.status === 'fallen' ? null : (
+        <div className="mt-3 flex flex-wrap items-start justify-end gap-2">
+          {relation === 'war' ? (
+            pendingPeace === 'incoming' ? (
+              <>
+                <span className="w-full text-right text-sm text-gold-bright sm:w-auto sm:self-center">They offer peace.</span>
+                <ActionButton variant="gold" size="sm" busy={busy} reason={blocked} onClick={() => onRespond(true)}>
+                  Accept peace
+                </ActionButton>
+                <button type="button" className="btn btn-sm" disabled={busy || !!blocked} onClick={() => onRespond(false)}>
+                  Refuse
+                </button>
+              </>
+            ) : pendingPeace === 'outgoing' ? (
+              <span className="self-center text-sm text-muted">Your envoy awaits their answer…</span>
+            ) : (
+              <ActionButton size="sm" busy={busy} reason={blocked} onClick={onPropose}>
+                Offer peace
+              </ActionButton>
+            )
+          ) : (
+            <>
+              {relation === 'neutral' && !offering('nap') ? (
+                <ActionButton size="sm" busy={busy} reason={blocked ?? entry.napBlockedReason} onClick={() => onProposePact('nap')} wrapperClassName="max-w-[12rem]">
+                  <Icon name="treaty" /> Offer a pact
+                </ActionButton>
+              ) : null}
+              {relation !== 'alliance' && !offering('alliance') ? (
+                <ActionButton size="sm" busy={busy} reason={blocked ?? entry.allianceBlockedReason} onClick={() => onProposePact('alliance')} wrapperClassName="max-w-[12rem]">
+                  <Icon name="alliance" /> Offer an alliance
+                </ActionButton>
+              ) : null}
+              {pact ? (
+                <ActionButton size="sm" variant="ghost" busy={busy} reason={blocked} onClick={onBreak} wrapperClassName="max-w-[12rem]">
+                  End the {pact.type === 'alliance' ? 'alliance' : 'pact'}
+                </ActionButton>
+              ) : null}
+              <ActionButton
+                variant="primary"
+                size="sm"
+                reason={blocked ?? (entry.canDeclareWar ? null : (entry.declareBlockedReason ?? 'War cannot be declared now'))}
+                busy={busy}
+                onClick={onDeclare}
+                wrapperClassName="max-w-[12rem]"
+              >
+                Declare war · {fmt(warCost)}
+              </ActionButton>
+            </>
+          )}
+        </div>
+      )}
     </li>
   );
 }

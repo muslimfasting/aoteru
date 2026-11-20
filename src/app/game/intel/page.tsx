@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { EspionageOpDTO, EspionageResponse, IntelDTO, ProvinceDetailResponse, ProvinceSummaryDTO, WorldMapResponse } from '@/game/api';
 import { BUILDINGS, BUILDING_TYPES, RESOURCE_INFO, RESOURCE_KEYS, totalUnits } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
+import { STANCE_DEFS, TACTIC_DEFS } from '@/game/strategy';
+import { STANCE_ICON } from '@/components/strategy';
 import { relationChip } from '@/components/ProvincePanel';
 import { ActionButton, ConfirmDialog, Countdown, EmptyState, ErrorState, LoadingState, PageHeader, Panel, TimedProgress, UnitsRow } from '@/components/ui';
 import { apiPost } from '@/lib/api';
@@ -214,6 +216,27 @@ function ReportCard({ op, report, onExpire }: { op: EspionageOpDTO; report: Inte
           {fmt(totalUnits(report.units))} soldiers · <strong>{fmt(report.power)} power</strong> · castle Lv {report.castleLevel} · loyalty {Math.round(report.loyalty)}
         </p>
       </div>
+      {report.stance && STANCE_DEFS[report.stance] ? (
+        <div className="mt-2.5 flex items-start gap-2.5 rounded-[3px] border border-ink-900/25 bg-ink-900/[0.06] px-3 py-2">
+          <span className="seal seal-sm seal-ink shrink-0" aria-hidden>
+            <Icon name={STANCE_ICON[report.stance]} />
+          </span>
+          <div className="min-w-0 text-sm leading-snug">
+            <p>
+              <span className="text-ink-600">Held in </span>
+              <strong className="font-display text-base">{STANCE_DEFS[report.stance].name}</strong>
+            </p>
+            <p className="text-ink-700">{STANCE_DEFS[report.stance].summary}</p>
+            <p className="mt-0.5 font-bold text-vermilion-deep">
+              {STANCE_DEFS[report.stance].counters
+                ? `It defeats ${TACTIC_DEFS[STANCE_DEFS[report.stance].counters!].name}: attack with any other tactic.`
+                : report.stance === 'ambush'
+                  ? 'An ambush: because you have seen it, it will fail while this report is fresh.'
+                  : 'It defeats no particular tactic.'}
+            </p>
+          </div>
+        </div>
+      ) : null}
       <p className="mt-2 text-xs text-ink-700">
         {BUILDING_TYPES.filter((t) => report.buildings[t] > 0)
           .map((t) => `${BUILDINGS[t].name} ${report.buildings[t]}`)

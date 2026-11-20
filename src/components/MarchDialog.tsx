@@ -10,7 +10,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArmyOverviewResponse, MarchPreviewResponse, MarchResponse, WorldMapResponse } from '@/game/api';
 import { UNITS, UNIT_TYPES, armyPower, emptyUnits, totalUnits, type UnitCounts } from '@/game/config';
+import { RESOURCE_KEYS } from '@/game/config';
 import { PROVINCE_BY_CODE } from '@/game/map';
+import { TACTIC_DEFS, type TacticId } from '@/game/strategy';
+import { KnownStanceNote, TacticList, chanceLabel } from './strategy';
 import { ApiError, apiPost, errorMessage, newIdempotencyKey } from '@/lib/api';
 import { EVENTS } from '@/lib/events';
 import { fmt, fmtDuration } from '@/lib/format';
@@ -43,6 +46,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
   const [dest, setDest] = useState<string | null>(targetId);
   const [units, setUnits] = useState<UnitCounts>(emptyUnits());
   const [confirming, setConfirming] = useState(false);
+  const [tactic, setTactic] = useState<TacticId>('assault');
   const idemKey = useRef(newIdempotencyKey());
   const autoFilled = useRef<string | null>(null);
 
@@ -76,6 +80,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
     autoFilled.current = key;
     setUnits(dest && !destIsOwn ? { ...available } : emptyUnits());
     setConfirming(false);
+    setTactic('assault');
   }, [source, dest, destIsOwn, available, army.data]);
 
   // Never exceed what is stationed there (e.g. after a refresh).
@@ -134,7 +139,13 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
   const stale = request !== debounced || previewing;
   const intent = preview?.intent ?? (destIsOwn ? 'move' : 'attack');
   const isAttack = intent === 'attack';
-  const lacksFood = preview ? preview.supplies > resources.food : false;
+  // Attacks choose a tactic; the server says which ones this host can use.
+  const tactics = isAttack ? (preview?.tactics ?? []) : [];
+  const chosen = tactics.find((t) => t.id === tactic) ?? null;
+  const supplies = preview ? Math.ceil(preview.supplies * (chosen?.supplyFactor ?? 1)) : 0;
+  const tacticCost = chosen?.cost ?? {};
+  const shortOf = RESOURCE_KEYS.filter((k) => (tacticCost[k] ?? 0) + (k === 'food' ? supplies : 0) > resources[k]);
+  const lacksFood = preview ? supplies > resources.food : false;
 
   let blocked: string | null = null;
   if (!source) blocked = 'Choose where the army sets out from';
@@ -143,17 +154,21 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
   else if (previewError) blocked = previewError;
   else if (preview && !preview.ok) blocked = preview.reason ?? 'This order cannot be given';
   else if (lacksFood) blocked = 'Not enough food for the campaign supplies';
+  else if (isAttack && chosen?.blockedReason) blocked = `${TACTIC_DEFS[tactic].name}: ${chosen.blockedReason}`;
+  else if (isAttack && shortOf.length > 0) blocked = `Not enough ${shortOf.join(' and ')} for ${TACTIC_DEFS[tactic].name}`;
 
   const send = async () => {
     if (!source || !dest) return;
     const result = await action.run(
       () =>
         isAttack
-          ? apiPost<MarchResponse>('/api/battles/declare', { fromProvinceId: source, targetProvinceId: dest, units }, { idempotencyKey: idemKey.current })
+          ? apiPost<MarchResponse>('/api/battles/declare', { fromProvinceId: source, targetProvinceId: dest, units, tactic }, { idempotencyKey: idemKey.current })
           : apiPost<MarchResponse>('/api/army/move', { fromProvinceId: source, toProvinceId: dest, units }, { idempotencyKey: idemKey.current }),
       {
         success: () =>
-          isAttack ? `Your army marches on ${destProvince?.name ?? 'the enemy'}.` : `Your soldiers set out for ${destProvince?.name ?? 'their new post'}.`,
+          isAttack
+            ? `Your army marches on ${destProvince?.name ?? 'the enemy'}${tactic === 'assault' ? '' : ` to attempt a ${TACTIC_DEFS[tactic].name.toLowerCase()}`}.`
+            : `Your soldiers set out for ${destProvince?.name ?? 'their new post'}.`,
       },
     );
     if (result) onClose();
@@ -223,9 +238,18 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Fact label="Your force" value={`${fmt(power)} power`} />
             <Fact label="Defenders" value={knownStrength ? (knownStrength.power !== null ? `${fmt(knownStrength.power)} power` : knownStrength.label) : 'Unknown'} />
-            <Fact label="March" value={preview ? fmtDuration(preview.durationMs) : '—'} />
-            <Fact label="Supplies" value={preview ? `${fmt(preview.supplies)} food` : '—'} />
+            <Fact label="March" value={preview ? fmtDuration(preview.durationMs + (chosen?.extraMs ?? 0)) : '—'} />
+            <Fact label="Supplies" value={preview ? `${fmt(supplies)} food` : '—'} />
           </dl>
+          <div className="panel-flat p-3 text-sm">
+            <p className="font-display text-base font-bold">
+              Tactic: {TACTIC_DEFS[tactic].name}
+              {chosen && chosen.chance !== null ? <span className="num font-body text-sm font-normal text-muted"> · comes off about {chanceLabel(chosen.chance)}</span> : null}
+            </p>
+            <p className="mt-1 text-parchment/85">{tactic === 'assault' ? TACTIC_DEFS.assault.summary : TACTIC_DEFS[tactic].effect}</p>
+            {tactic !== 'assault' ? <p className="mt-1 text-muted">The risk: {TACTIC_DEFS[tactic].risk}</p> : null}
+            {preview ? <KnownStanceNote known={preview.knownStance} tactic={tactic} className="mt-2" /> : null}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -298,7 +322,7 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                   <Fact label="Order" value={preview.intent === 'attack' ? 'Attack' : 'Reinforce'} dark />
                   <Fact label="March time" value={preview.durationMs > 0 ? fmtDuration(preview.durationMs) : '—'} dark />
-                  <Fact label="Supplies" value={`${fmt(preview.supplies)} food`} warn={lacksFood} dark />
+                  <Fact label="Supplies" value={`${fmt(supplies)} food`} warn={lacksFood} dark />
                   <Fact label="Your force" value={`${fmt(total)} · ${fmt(power)} power`} dark />
                 </dl>
                 {preview.path.length > 0 ? (
@@ -320,9 +344,17 @@ function MarchDialogBody({ onClose, sourceId, targetId }: { onClose: () => void;
                 ) : isAttack && dest ? (
                   <p className="mt-1 text-sm text-ink-600">Defenders: unknown. Send a scout first to count their spears.</p>
                 ) : null}
+                {isAttack && tactics.length > 0 ? <KnownStanceNote known={preview.knownStance} tactic={tactic} paper className="mt-2 border-t border-ink-600/20 pt-2" /> : null}
               </>
             )}
           </div>
+
+          {isAttack && tactics.length > 0 ? (
+            <div>
+              <p className="heading-rule mb-2">Tactic</p>
+              <TacticList options={tactics} value={tactic} onChange={setTactic} have={resources} />
+            </div>
+          ) : null}
         </div>
       )}
     </Dialog>

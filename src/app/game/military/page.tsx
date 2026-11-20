@@ -9,6 +9,7 @@ import { MarchDialog } from '@/components/MarchDialog';
 import { ActionButton, Bar, CostRow, Countdown, EmptyState, ErrorState, LoadingState, NumberStepper, PageHeader, Panel, Stat, Tabs, TimedProgress, UnitsRow } from '@/components/ui';
 import { apiPost } from '@/lib/api';
 import { useNow } from '@/lib/clock';
+import { tacticName } from '@/components/strategy';
 import { EVENTS } from '@/lib/events';
 import { cx, fmt, fmtDuration, missingResources, timeAgo } from '@/lib/format';
 import { useGame } from '@/lib/game-context';
@@ -401,6 +402,7 @@ function BattleRow({ b, now, onDone }: { b: BattleSummaryDTO; now: number; onDon
           </span>
           <span className="block truncate text-xs text-muted">
             against {opponent}
+            {b.role === 'attacker' || b.status === 'resolved' ? ` · ${tacticName(b.tactic)}` : ''}
             {b.provinceCaptured ? (b.role === 'attacker' ? ' · province taken' : ' · province lost') : ''}
             {b.attackerLosses !== null && b.defenderLosses !== null ? ` · losses ${fmt(b.role === 'attacker' ? b.attackerLosses : b.defenderLosses)} / ${fmt(b.role === 'attacker' ? b.defenderLosses : b.attackerLosses)}` : ''}
           </span>

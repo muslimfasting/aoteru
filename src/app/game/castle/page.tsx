@@ -6,6 +6,7 @@ import { Suspense, useEffect } from 'react';
 import type { BuildingDTO, ProvinceDetailResponse, ProvinceSummaryDTO, WorldMapResponse } from '@/game/api';
 import { BUILDINGS, RESOURCE_INFO, RESOURCE_KEYS, armyPower, bannerHex, emptyBuildingLevels, totalUnits } from '@/game/config';
 import { CityView } from '@/components/CityView';
+import { StancePanel } from '@/components/StancePanel';
 import { ActionButton, Bar, CostRow, Countdown, DurationText, EmptyState, ErrorState, LoadingState, PageHeader, Panel, TimedProgress, UnitsRow } from '@/components/ui';
 import { apiPost } from '@/lib/api';
 import { useNow } from '@/lib/clock';
@@ -312,6 +313,8 @@ function ProvinceManagement({ provinceId }: { provinceId: string }) {
             </div>
           ) : null}
         </Panel>
+
+        <StancePanel provinceId={provinceId} provinceName={province.name} stance={own.stance} onChanged={(res) => state.setData(res)} onRefresh={() => void state.refresh()} />
       </div>
     </div>
     </div>

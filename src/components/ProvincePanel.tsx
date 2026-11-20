@@ -20,12 +20,16 @@ import { MonBadge, NeutralBadge } from './Banner';
 import { ActionButton, Bar, ConfirmDialog, Countdown, ErrorState, LoadingState, TimedProgress, UnitsRow } from './ui';
 
 import { Glyph, Icon } from '@/components/icons';
+import { STANCE_DEFS } from '@/game/strategy';
+import { STANCE_ICON, stanceDefeats } from './strategy';
 export function relationChip(relation: string): { label: string; cls: string } {
   switch (relation) {
     case 'own':
       return { label: 'Your land', cls: 'chip' };
     case 'enemy':
       return { label: 'At war', cls: 'chip chip-red' };
+    case 'allied':
+      return { label: 'Your ally', cls: 'chip chip-jade' };
     case 'unclaimed':
       return { label: 'Unclaimed', cls: 'chip chip-muted' };
     default:
@@ -151,6 +155,19 @@ export function ProvincePanel({
               <p className="mt-1 text-xs text-muted">
                 {fmt(totalUnits(own.garrison))} soldiers · {fmt(armyPower(own.garrison))} power
               </p>
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <Icon name={STANCE_ICON[own.stance.current]} className="text-gold" />
+                <span className="text-muted">Stance:</span>
+                <span className="font-display font-bold">{STANCE_DEFS[own.stance.current].name}</span>
+                {own.stance.pending ? (
+                  <span className="text-xs text-muted">
+                    → {STANCE_DEFS[own.stance.pending.stance].name} in <Countdown to={own.stance.pending.readyAt} done="a moment" onDone={() => void state.refresh()} />
+                  </span>
+                ) : null}
+                <Link href={`/game/castle?province=${p.id}`} className="tap-link text-gold">
+                  Change
+                </Link>
+              </p>
             </section>
 
             {upgrading.length > 0 || own.recruitment.length > 0 ? (
@@ -193,11 +210,17 @@ export function ProvincePanel({
                   <p className="num mt-1.5 text-sm">
                     {fmt(totalUnits(intel.units))} soldiers · {fmt(intel.power)} power · castle level {intel.castleLevel} · loyalty {Math.round(intel.loyalty)}
                   </p>
+                  {intel.stance && STANCE_DEFS[intel.stance] ? (
+                    <p className="mt-1.5 border-t border-ink-900/20 pt-1.5 text-sm">
+                      Held in <strong>{STANCE_DEFS[intel.stance].name}</strong>. <span className="text-ink-700">{stanceDefeats(intel.stance)}</span>
+                    </p>
+                  ) : null}
                 </div>
               ) : p.strength ? (
                 <p className="text-sm">
                   <span className="font-display text-base font-bold">{p.strength.label}</span>
-                  <span className="text-muted"> — {p.strength.exact ? 'counted by your scouts' : 'a rough estimate from across the border'}</span>
+                  {p.strength.exact && p.strength.power !== null ? <span className="num text-muted"> · {fmt(p.strength.power)} power</span> : null}
+                  <span className="text-muted"> — {p.relation === 'allied' ? 'shown to you by your ally' : p.strength.exact ? 'counted by your scouts' : 'a rough estimate from across the border'}</span>
                 </p>
               ) : (
                 <p className="text-sm text-muted">Nothing is known of the defenders. Only provinces that border your land can be judged by eye; send a scout for a true count.</p>

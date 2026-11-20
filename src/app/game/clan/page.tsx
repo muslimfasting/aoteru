@@ -41,10 +41,11 @@ import {
   emptyAmounts,
   type AmountBag,
 } from '@/components/clan';
+import { DoctrinePanel } from '@/components/DoctrinePanel';
 import { Icon, type IconName } from '@/components/icons';
 import { Portrait } from '@/components/Portrait';
 import { ActionButton, ConfirmDialog, Dialog, ErrorState, LoadingState, PageHeader, Panel, Stat, Tabs } from '@/components/ui';
-import { apiPost } from '@/lib/api';
+import { ApiError, apiPost } from '@/lib/api';
 import { useNow } from '@/lib/clock';
 import { EVENTS } from '@/lib/events';
 import { cx, fmt, fmtCompact, fmtDateTime, fmtSigned, timeAgo } from '@/lib/format';
@@ -93,6 +94,13 @@ function ClanHub() {
   const requested = params.get('tab') as Tab | null;
   const tab: Tab = requested && TABS.includes(requested) ? requested : 'overview';
   const setTab = (next: Tab) => router.replace(next === 'overview' ? '/game/clan' : `/game/clan?tab=${next}`, { scroll: false });
+
+  // Removed from the nation (or it was dissolved) while this screen was open: catch up with the session at once.
+  const lost = state.error instanceof ApiError && state.error.code === 'NO_CLAN';
+  const refreshMe = session.refreshMe;
+  useEffect(() => {
+    if (lost) void refreshMe();
+  }, [lost, refreshMe]);
 
   if (state.error && !state.data) return <ErrorState message={state.error.message} onRetry={() => void state.refresh()} />;
   if (!state.data) return <LoadingState label="Opening the government register…" />;
@@ -250,8 +258,9 @@ function Overview({ hub, state, onLeft }: { hub: ClanHubResponse; state: HubStat
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-parchment/90">{clan.description || 'No description yet.'}</p>
             </div>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gold/15 pt-3 sm:grid-cols-4">
+          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gold/15 pt-3 sm:grid-cols-5">
             <Stat label="Rank" value={hub.fallen ? '—' : `#${clan.rank}`} hint={`${fmt(clan.score)} renown`} />
+            <Stat label="War record" value={`${clan.victories} – ${clan.defeats}`} hint="battles won – lost" />
             <Stat label="Provinces" value={clan.provinceCount} hint={`${fmtCompact(clan.population)} people`} />
             <Stat label="Officials" value={`${clan.memberCount} / ${hub.maxMembers}`} />
             <Stat label="Army" value={fmtCompact(clan.army.total)} hint={`of ${fmtCompact(clan.army.capacity)}`} />
@@ -259,6 +268,8 @@ function Overview({ hub, state, onLeft }: { hub: ClanHubResponse; state: HubStat
         </Panel>
 
         <Council members={hub.members} />
+
+        <DoctrinePanel hub={hub} onChanged={(res) => state.setData(res)} />
       </div>
 
       <div className="space-y-4 lg:space-y-5">

@@ -484,6 +484,9 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
                 {p.relation === 'enemy' ? (
                   <polygon points={pointsAttr(def.polygon)} fill="none" stroke="#d9514f" strokeWidth="2.6" strokeLinejoin="round" strokeDasharray="10 7" />
                 ) : null}
+                {p.relation === 'allied' ? (
+                  <polygon points={pointsAttr(def.polygon)} fill="none" stroke="#7fc79b" strokeWidth="2.4" strokeLinejoin="round" strokeDasharray="2 6" strokeLinecap="round" />
+                ) : null}
                 {isSelected ? (
                   <>
                     <polygon points={pointsAttr(def.polygon)} fill="none" stroke="#fff3c9" strokeWidth="7" strokeLinejoin="round" opacity="0.35" />
@@ -697,6 +700,7 @@ export function WorldMap({ provinces, clans, movements = [], selectedId, onSelec
               <div className="paper mb-1.5 animate-rise space-y-1.5 p-3 text-[0.78rem] leading-snug">
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-[#c9a544] bg-[#9b2d30]/60" />} label="Your land (gold border)" />
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-dashed border-[#c94a48] bg-[#31487a]/60" />} label="At war with you" />
+                <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-dotted border-[#5fae80] bg-[#31487a]/60" />} label="Your ally (garrison shown)" />
                 <LegendRow swatch={<span className="block h-3.5 w-5 border-2 border-ink-900 bg-[#31487a]/60" />} label="Another nation" />
                 <LegendRow
                   swatch={<span className="block h-3.5 w-5 border-2 border-ink-900" style={{ background: 'repeating-linear-gradient(128deg,#e6d9ba 0 3px,#c9bb98 3px 5px)' }} />}
