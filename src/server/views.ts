@@ -658,7 +658,7 @@ function toBattleSummary(b: BattleListRow, clanId: string): BattleSummaryDTO {
     attackerClanId: b.attacker_clan_id,
     attackerName: b.attacker_name,
     defenderClanId: b.defender_clan_id,
-    defenderName: b.defender_name ?? `Warriors of ${b.province_name}`,
+    defenderName: b.defender_name ?? `Militia of ${b.province_name}`,
     role: b.attacker_clan_id === clanId ? 'attacker' : 'defender',
     // The defender learns the tactic from the battle report, not before.
     tactic: (b.attacker_clan_id === clanId || b.status === 'resolved') && (TACTICS as readonly string[]).includes(b.tactic) ? (b.tactic as TacticId) : 'assault',

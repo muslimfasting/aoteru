@@ -18,7 +18,7 @@ More in [`docs/screenshots`](docs/screenshots): overview, castle, Five Pillars a
 2. Found a nation on a starting province (name, tag, banner, recruitment setting) — or discover a nation and join it: walk into an open one, apply, or accept an invitation.
 3. Hold an office: Chancellor, Minister of State, General, Chief of Staff, Director of Intelligence, Minister of Finance, Official or Clerk. The Chancellor decides what each office may do.
 4. Pay into the shared treasury; the Minister of Finance can pay officials out of it. Every movement is logged with the member who made it.
-5. Build the nation's Castle, Farm, Market, Barracks and Dojo, recruit Ashigaru, Yari, Archers, Samurai and Cavalry, and feed the population and the army from the treasury.
+5. Build the nation's Citadel, Farm, Market, Barracks and Academy, recruit Militia, Line Infantry, Riflemen, Guards and Cavalry, and feed the population and the army from the treasury.
 6. Level your own Five Pillars. Each pillar of the nation is carried by the official holding its cabinet seat, so a government of specialists is stronger than one player mastering everything.
 7. Scout a neighbour: the report shows its garrison and the stance it is held in.
 8. In the War Council, draft a plan — target, host, tactic, commander — give members duties, and launch it when the nation is ready. Tactics can be countered; a wrong guess costs the battle.

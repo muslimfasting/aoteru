@@ -254,7 +254,7 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
     },
     defender: {
       clanId: defenderId,
-      name: defender?.name ?? `Warriors of ${province.name}`,
+      name: defender?.name ?? `Militia of ${province.name}`,
       units: garrison?.units ?? emptyUnits(),
       morale: Math.round((defenderMorale + strategy.defender.morale) * 10) / 10,
       mods: withStrategy(defender ? sideMods(modsD, { toughness: modsD.defense }) : neutralBattleMods(), strategy.defender),
@@ -365,7 +365,7 @@ export async function resolveBattle(g: G, battleId: string): Promise<void> {
     await chronicle(g, {
       type: 'conquest',
       title: `${attacker.name} takes ${province.name}`,
-      description: `On ${dayLabel(g.tick)}, under ${WEATHER_INFO[weather].name.toLowerCase()}, the ${attacker.name} banner was raised over ${province.name}, taken from ${defender ? `the nation of ${defenderName}` : 'its local warriors'}. ${attackerLost + defenderLost} men fell.`,
+      description: `On ${dayLabel(g.tick)}, under ${WEATHER_INFO[weather].name.toLowerCase()}, the ${attacker.name} banner was raised over ${province.name}, taken from ${defender ? `the nation of ${defenderName}` : 'its local militia'}. ${attackerLost + defenderLost} men fell.`,
       provinceId: province.id,
       clanId: attacker.id,
     });

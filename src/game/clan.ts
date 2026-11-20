@@ -208,7 +208,7 @@ export const DOCTRINE_DEFS: Record<DoctrineId, DoctrineDef> = {
     id: 'defensive',
     name: 'Way of the Mountain',
     motto: 'Be immovable.',
-    summary: 'Castles, fortification and supply.',
+    summary: 'Citadels, fortification and supply.',
     mods: { defense: 0.12, upkeep: -0.05, attack: -0.04 },
     tacticChance: 0,
     effects: ['+12% protection when defending', '-5% army upkeep', '-4% damage'],

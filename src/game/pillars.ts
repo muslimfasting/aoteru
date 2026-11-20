@@ -167,12 +167,12 @@ export const SKILLS: SkillDef[] = [
   },
   {
     code: 'mil_siege', pillar: 'military', name: 'Siege Warfare', category: 'Siege Warfare',
-    description: 'Sappers, ladders and fire arrows wear down castle walls.',
-    maxRank: 5, perRank: { siege: 0.1 }, effectText: 'Ignore 10% of enemy castle defense per rank',
+    description: 'Sappers, ladders and field guns wear down citadel walls.',
+    maxRank: 5, perRank: { siege: 0.1 }, effectText: 'Ignore 10% of enemy citadel defense per rank',
     requiresLevel: 4, requiresSkills: [{ code: 'mil_tactics', rank: 2 }],
   },
   {
-    code: 'mil_infantry', pillar: 'military', name: 'Way of the Spear', category: 'Infantry Mastery',
+    code: 'mil_infantry', pillar: 'military', name: 'Way of the Bayonet', category: 'Infantry Mastery',
     description: 'Your foot soldiers fight as one wall of steel.',
     maxRank: 5, perRank: { infantry: 0.05 }, effectText: '+5% infantry damage per rank',
     requiresLevel: 5, requiresSkills: [{ code: 'mil_tactics', rank: 3 }], branch: 'military_mastery',
@@ -251,7 +251,7 @@ export const SKILLS: SkillDef[] = [
   // ---- Intelligence ------------------------------------------------------
   {
     code: 'int_scouting', pillar: 'intelligence', name: 'Scouting', category: 'Scouting',
-    description: 'Trained eyes on every road count spears before the enemy knows they are watched.',
+    description: 'Trained eyes on every road count rifles before the enemy knows they are watched.',
     maxRank: 5, perRank: { scoutSuccess: 0.06 }, effectText: '+6% scouting success per rank',
     requiresLevel: 1, requiresSkills: [],
   },

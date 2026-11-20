@@ -256,7 +256,7 @@ async function disbandClan(g: G, clan: ClanRow, leaderName: string): Promise<voi
   await chronicle(g, {
     type: 'fallen',
     title: `The nation of ${clan.name} is dissolved`,
-    description: `On ${dayLabel(g.tick)}, ${leaderName} lowered the banner of the nation of ${clan.name}. Its lands returned to the local warriors.`,
+    description: `On ${dayLabel(g.tick)}, ${leaderName} lowered the banner of the nation of ${clan.name}. Its lands returned to the local militias.`,
     clanId: clan.id,
   });
   await emit(g, WORLD_ROOM, 'diplomacy:updated', { clanId: clan.id });

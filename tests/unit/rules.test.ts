@@ -128,7 +128,7 @@ describe('buildings and units', () => {
     const levels = { ...emptyBuildingLevels(), castle: 1 };
     expect(buildingBlockReason('farm', levels)).toBeNull();
     expect(buildingBlockReason('dojo', levels)).toMatch(/Barracks level 2/);
-    expect(buildingBlockReason('farm', { ...levels, farm: 1 })).toMatch(/Castle level 2/);
+    expect(buildingBlockReason('farm', { ...levels, farm: 1 })).toMatch(/Citadel level 2/);
     expect(buildingBlockReason('castle', { ...levels, castle: 10 })).toMatch(/maximum/);
   });
 
@@ -139,7 +139,7 @@ describe('buildings and units', () => {
     expect(unitBlockReason('ashigaru', built)).toBeNull();
     expect(unitBlockReason('archer', built)).toBeNull();
     expect(unitBlockReason('samurai', built)).toBeNull();
-    expect(unitBlockReason('cavalry', built)).toMatch(/Dojo level 2/);
+    expect(unitBlockReason('cavalry', built)).toMatch(/Academy level 2/);
   });
 
   it('recruitment and marching take time', () => {
@@ -194,6 +194,6 @@ describe('five pillars', () => {
     expect(skillBlockReason(spear, 4, 1, { mil_tactics: 3 })).toMatch(/level 5/);
     expect(skillBlockReason(spear, 5, 1, { mil_tactics: 2 })).toMatch(/Tactics rank 3/);
     expect(skillBlockReason(spear, 5, 1, { mil_tactics: 3 })).toBeNull();
-    expect(skillBlockReason(horse, 5, 1, { mil_tactics: 3, mil_infantry: 1 })).toMatch(/you chose Way of the Spear/);
+    expect(skillBlockReason(horse, 5, 1, { mil_tactics: 3, mil_infantry: 1 })).toMatch(/you chose Way of the Bayonet/);
   });
 });
