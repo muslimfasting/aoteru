@@ -6,11 +6,11 @@ A persistent, server-authoritative multiplayer grand strategy game set in a Japa
 
 The defining principle: *the strongest nation does not always win; the smartest one does.*
 
-| Japan map (desktop) | Province sheet (phone) |
+| War Council (desktop) | Province (phone) |
 |---|---|
-| ![The Kansai map with a province selected](docs/screenshots/map-desktop.jpg) | ![Province detail as a bottom sheet on a phone](docs/screenshots/province-sheet-mobile.jpg) |
+| ![A war plan with its tactic, duties and launch readiness](docs/screenshots/war-council-desktop.jpg) | ![A province with its town map and buildings on a phone](docs/screenshots/province-mobile.jpg) |
 
-More in [`docs/screenshots`](docs/screenshots): overview, castle, Five Pillars and a battle report.
+More in [`docs/screenshots`](docs/screenshots): overview, the Japan map, the government screen, Five Pillars, a battle report with its strategy section, and private messages.
 
 ## What you can do in the prototype
 

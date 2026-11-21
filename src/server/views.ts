@@ -690,10 +690,17 @@ export async function buildBattle(db: Db, clan: ClanRow, battleId: string): Prom
   if (!b) throw notFound('Battle');
   if (b.attacker_clan_id !== clan.id && b.defender_clan_id !== clan.id) throw forbidden('That battle was not yours');
   const resolved = b.status === 'resolved' && b.inputs && b.result;
+  // Unclaimed land is held by its militia. Records written before the garrisons were renamed
+  // call them otherwise; the stored record stays as it is, only the name shown is brought in line.
+  // (Names play no part in the simulation, so the replay check below is unaffected.)
+  let inputs = resolved ? (b.inputs as BattleInputs) : null;
+  if (inputs && !inputs.defender.clanId) {
+    inputs = { ...inputs, defender: { ...inputs.defender, name: `Militia of ${inputs.province.name}` } };
+  }
   return {
     battle: toBattleSummary(b, clan.id),
     weather: b.weather,
-    inputs: resolved ? (b.inputs as BattleInputs) : null,
+    inputs,
     seed: resolved ? b.seed : null,
     result: resolved ? b.result : null,
     verified: resolved ? verifyBattle(b.inputs as BattleInputs, b.seed, b.result as BattleResult) : null,
